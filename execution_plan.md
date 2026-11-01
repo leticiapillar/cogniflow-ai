@@ -23,11 +23,11 @@
 - [x] Construir mecanismo de abstração para facilitar a futura troca do modelo por um LLM open-source local via Ollama.
 
 ## Sprint 4: Interface Visual Interativa (Next.js + React Flow)
-- [ ] Configurar a biblioteca React Flow no projeto Next.js para o ambiente de mapas mentais.
-- [ ] Consumir o endpoint do FastAPI (`/api/generate-map`) e tratar as respostas no frontend.
-- [ ] Integrar motor de auto-layout (como Dagre.js) para calcular o espaçamento (X e Y) dos nós de forma automática.
-- [ ] Desenvolver componentes de interface focados em acessibilidade para minimizar a sobrecarga cognitiva.
-- [ ] Tratar cenários de carregamento (*loading states*) e mensagens de erro amigáveis na UI.
+- [x] Configurar a biblioteca React Flow no projeto Next.js para o ambiente de mapas mentais.
+- [x] Consumir o endpoint do FastAPI (`/api/generate-map`) e tratar as respostas no frontend.
+- [x] Integrar motor de auto-layout (como Dagre.js) para calcular o espaçamento (X e Y) dos nós de forma automática.
+- [x] Desenvolver componentes de interface focados em acessibilidade para minimizar a sobrecarga cognitiva.
+- [x] Tratar cenários de carregamento (*loading states*) e mensagens de erro amigáveis na UI.
 
 ## Sprint 5: Homologação, Testes e Preparação para o Pitch
 - [x] Escrever testes no PyTest iterando sobre os 20 exemplos reais de materiais acadêmicos.

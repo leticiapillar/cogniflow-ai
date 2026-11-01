@@ -4,6 +4,8 @@
 
 O **CogniFlow AI** é uma plataforma educacional assistiva que utiliza **RAG (Retrieval-Augmented Generation)** e **IA Generativa** para converter materiais acadêmicos densos (PDFs, apostilas e transcrições) em mapas mentais visuais estruturados, reduzindo a sobrecarga cognitiva para estudantes surdos e neurodivergentes (TDAH/TEA).
 
+![Interface do CogniFlow AI](docs/cogniflow-interface.png)
+
 ---
 
 ## Arquitetura do Projeto
@@ -12,6 +14,7 @@ O **CogniFlow AI** é uma plataforma educacional assistiva que utiliza **RAG (Re
 cogniflow-ai/
 ├── docker-compose.yml          # PostgreSQL 16 + extensão pgvector
 ├── execution_plan.md           # Plano de execução dividido em 5 Sprints
+├── docs/                       # Arquitetura, execução e validação do frontend
 ├── Proposta_Projeto_CogniFlow_AI.pdf
 ├── backend/                    # API Orquestradora (Python + FastAPI + Clean Architecture)
 │   ├── app/
@@ -25,11 +28,15 @@ cogniflow-ai/
 │   │   ├── init_db.sql         # Script de inicialização da extensão vector
 │   │   └── demo_pitch.py       # Script de demonstração ao vivo para o Pitch
 │   └── tests/                  # Suíte de testes automatizados (PyTest + Testcontainers)
-└── frontend/                   # Interface Visual (Next.js 15 + TypeScript + Tailwind CSS)
-    └── src/
-        ├── app/                # App Router (layout e páginas)
-        └── types/              # Contratos TypeScript espelhando os schemas do backend
+└── frontend/                   # Next.js 16 + TypeScript + Tailwind + React Flow
+    ├── app/                    # App Router, layout e estilos
+    ├── components/             # Composição e apresentação compartilhada
+    ├── features/               # documents e mind-map: componentes, hooks e serviços
+    ├── services/               # Cliente HTTP compartilhado
+    └── e2e/                    # Playwright: interação, acessibilidade e fluxo real
 ```
+
+Consulte a [estrutura do frontend](docs/arquitetura-frontend.md) para conhecer a organização das páginas, componentes, features, serviços e testes.
 
 ---
 
@@ -37,7 +44,7 @@ cogniflow-ai/
 
 - **Docker** e **Docker Compose** (para o banco PostgreSQL + `pgvector` e para os testes com Testcontainers)
 - **Python 3.11+** e `pip`
-- **Node.js 20+** e `npm`
+- **Node.js 20.19+** na linha 20, **22.12+** na linha 22 ou **24+**, e `npm`
 
 ---
 
@@ -114,12 +121,14 @@ cp .env.example .env.local
 ### 3.2. Instalar Dependências e Rodar em Modo de Desenvolvimento
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 O frontend estará disponível em:
 - **Aplicação Web**: http://localhost:3000
+
+Na interface, envie um PDF, informe o tema de estudo e gere os conceitos. Use o mapa para explorar as conexões ou selecione **Lista** para ler conceitos, resumos e relações em texto. A alternância preserva posições, zoom e seleção do mapa. Configuração, testes e limites de acessibilidade estão no [README do frontend](frontend/README.md).
 
 Para gerar o build de produção do frontend:
 
@@ -178,4 +187,18 @@ Para executar a conversão fim-a-fim do PDF da proposta com medição de **Recal
 ```bash
 PYTHONPATH=backend ./backend/.venv/bin/python backend/scripts/demo_pitch.py
 ```
+
+### 5.3. Verificar o Frontend
+
+Em outro terminal, a partir da raiz:
+
+```bash
+cd frontend
+npm run lint
+npx tsc --noEmit
+npm test
+npm run build
+```
+
+Com Google Chrome instalado, execute `npm run test:e2e`. A execução padrão usa respostas HTTP simuladas e não exige o backend. O [README do frontend](frontend/README.md) documenta também os testes com FastAPI e pgvector reais e as auditorias de acessibilidade.
 
