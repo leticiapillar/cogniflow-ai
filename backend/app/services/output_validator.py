@@ -26,10 +26,44 @@ def _clean_json_string(raw_output: str) -> str:
     return text
 
 
+def _replace_root_label(parsed_dict: dict[str, object], expected_topic: str) -> None:
+    """Use the trusted user query as the visual label of the root node."""
+    nodes = parsed_dict.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        return
+
+    root_node: dict[str, object] | None = None
+    for candidate in nodes:
+        if not isinstance(candidate, dict):
+            continue
+        data = candidate.get("data")
+        category = data.get("category") if isinstance(data, dict) else None
+        if isinstance(category, str) and category.lower() == "root":
+            root_node = candidate
+            break
+
+    if root_node is None:
+        root_node = next(
+            (
+                candidate
+                for candidate in nodes
+                if isinstance(candidate, dict) and candidate.get("type") == "input"
+            ),
+            None,
+        )
+
+    if root_node is None and isinstance(nodes[0], dict):
+        root_node = nodes[0]
+
+    if root_node is not None and isinstance(root_node.get("data"), dict):
+        root_node["data"]["label"] = expected_topic[:200]
+
+
 def validate_and_parse_mind_map_json(
     raw_output: str,
     source_chunks_used: int = 0,
     generation_latency_ms: float = 0.0,
+    expected_topic: str | None = None,
 ) -> GenerateMapResponse:
     """Validate LLM JSON string against Pydantic contracts and graph structural rules."""
     if not raw_output or not raw_output.strip():
@@ -47,6 +81,9 @@ def validate_and_parse_mind_map_json(
     if not isinstance(parsed_dict, dict):
         raise LLMOutputValidationError("LLM JSON root must be an object.")
 
+    if expected_topic is not None:
+        parsed_dict["topic"] = expected_topic
+        _replace_root_label(parsed_dict, expected_topic)
     parsed_dict["source_chunks_used"] = source_chunks_used
     parsed_dict["generation_latency_ms"] = round(max(0.0, generation_latency_ms), 3)
 

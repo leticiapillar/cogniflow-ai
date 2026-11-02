@@ -65,6 +65,7 @@ class GenerateMindMapUseCase:
             raw_output=raw_llm_json,
             source_chunks_used=len(context_chunks),
             generation_latency_ms=elapsed_ms,
+            expected_topic=request.query,
         )
         logger.info(
             "Generated validated mind map with %d nodes and %d edges (chunks=%d, latency=%.2f ms).",

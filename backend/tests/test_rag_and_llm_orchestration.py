@@ -28,6 +28,8 @@ def test_system_prompt_is_english_and_enforces_strict_json() -> None:
     assert '"nodes"' in MIND_MAP_SYSTEM_PROMPT
     assert '"edges"' in MIND_MAP_SYSTEM_PROMPT
     assert "<RETRIEVED_CONTEXT>" in MIND_MAP_SYSTEM_PROMPT
+    assert 'The "topic" field MUST reproduce the text inside <USER_QUERY> exactly' in MIND_MAP_SYSTEM_PROMPT
+    assert "same language used in <USER_QUERY>" in MIND_MAP_SYSTEM_PROMPT
 
     user_prompt = build_user_prompt(
         query="Clean Architecture and pgvector",
@@ -35,6 +37,7 @@ def test_system_prompt_is_english_and_enforces_strict_json() -> None:
     )
     assert "<USER_QUERY>" in user_prompt
     assert "FastAPI orchestrator with PostgreSQL and pgvector." in user_prompt
+    assert "Preserve the USER_QUERY exactly as the topic" in user_prompt
 
 
 def test_output_validator_accepts_valid_json_and_strips_fences() -> None:
@@ -72,6 +75,63 @@ def test_output_validator_accepts_valid_json_and_strips_fences() -> None:
     assert len(validated.nodes) == 2
     assert len(validated.edges) == 1
     assert validated.source_chunks_used == 3
+
+
+def test_output_validator_uses_the_requested_topic_instead_of_the_llm_title() -> None:
+    raw_json = json.dumps(
+        {
+            "topic": "Unrelated English title",
+            "nodes": [
+                {
+                    "id": "node-root",
+                    "type": "input",
+                    "data": {
+                        "label": "Central Concept",
+                        "summary": "Processo descrito no material.",
+                        "category": "root",
+                    },
+                }
+            ],
+            "edges": [],
+        }
+    )
+
+    validated = validate_and_parse_mind_map_json(
+        raw_json,
+        expected_topic="Como funciona a fotossíntese?",
+    )
+
+    assert validated.topic == "Como funciona a fotossíntese?"
+    assert validated.nodes[0].data.label == "Como funciona a fotossíntese?"
+
+
+def test_output_validator_limits_the_root_label_without_truncating_the_topic() -> None:
+    long_topic = "Tema " * 100
+    raw_json = json.dumps(
+        {
+            "topic": "Main topic title",
+            "nodes": [
+                {
+                    "id": "node-root",
+                    "type": "input",
+                    "data": {
+                        "label": "Central Concept",
+                        "summary": "Resumo.",
+                        "category": "root",
+                    },
+                }
+            ],
+            "edges": [],
+        }
+    )
+
+    validated = validate_and_parse_mind_map_json(
+        raw_json,
+        expected_topic=long_topic,
+    )
+
+    assert validated.topic == long_topic
+    assert validated.nodes[0].data.label == long_topic[:200]
 
 
 def test_output_validator_rejects_dangling_edges_and_duplicate_nodes() -> None:
