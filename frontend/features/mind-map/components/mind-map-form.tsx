@@ -1,17 +1,32 @@
 import { useEffect, useRef, type Ref } from "react";
+import { COVERAGE_OPTIONS } from "../schemas";
 import type { GenerationState } from "../types";
 
 type MindMapFormProps = {
   documentName?: string;
+  totalChunks?: number;
   query: string;
+  topK?: number;
   state: GenerationState;
   onQueryChange: (query: string) => void;
+  onTopKChange?: (topK: number) => void;
   onGenerate: () => void;
   onCancel: () => void;
   inputRef?: Ref<HTMLTextAreaElement>;
 };
 
-export function MindMapForm({ documentName, query, state, onQueryChange, onGenerate, onCancel, inputRef }: MindMapFormProps) {
+export function MindMapForm({
+  documentName,
+  totalChunks,
+  query,
+  topK = 5,
+  state,
+  onQueryChange,
+  onTopKChange,
+  onGenerate,
+  onCancel,
+  inputRef,
+}: MindMapFormProps) {
   const errorMessage = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
@@ -21,6 +36,7 @@ export function MindMapForm({ documentName, query, state, onQueryChange, onGener
   const isGenerating = state.status === "generating";
   const isInvalidQuery = state.status === "error" &&
     (state.error.kind === "validation" || state.error.status === 422);
+  const selectedCoverage = COVERAGE_OPTIONS.find((option) => option.value === topK) ?? COVERAGE_OPTIONS[0];
 
   return (
     <section
@@ -37,7 +53,10 @@ export function MindMapForm({ documentName, query, state, onQueryChange, onGener
       </p>
 
       {documentName && (
-        <p className="mt-3 break-words text-sm text-muted">Material selecionado: {documentName}</p>
+        <p className="mt-3 break-words text-sm text-muted">
+          Material selecionado: {documentName}
+          {typeof totalChunks === "number" ? ` (${totalChunks} ${totalChunks === 1 ? "trecho" : "trechos"})` : ""}
+        </p>
       )}
 
       <form
@@ -51,6 +70,29 @@ export function MindMapForm({ documentName, query, state, onQueryChange, onGener
       >
         <fieldset disabled={!documentName} aria-describedby="query-help query-availability">
           <legend className="sr-only">Consulta para geração do mapa mental</legend>
+
+          <div className="mb-4">
+            <label htmlFor="study-coverage" className="block text-sm font-semibold">
+              Abrangência do mapa
+            </label>
+            <select
+              id="study-coverage"
+              name="top_k"
+              value={topK}
+              aria-describedby="coverage-help"
+              onChange={(event) => onTopKChange?.(Number(event.target.value))}
+              className="mt-2 block w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm transition-colors focus:border-accent disabled:cursor-not-allowed disabled:bg-[#f1f2f6]"
+            >
+              {COVERAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p id="coverage-help" className="mt-1.5 text-xs text-muted">
+              {selectedCoverage.description}
+            </p>
+          </div>
 
           <label htmlFor="study-query" className="block text-sm font-semibold">
             O que você quer estudar?

@@ -18,6 +18,11 @@ from app.services.output_validator import (
     LLMOutputValidationError,
     validate_and_parse_mind_map_json,
 )
+from app.services.pedagogical_structurer import (
+    build_pedagogical_outline,
+    compile_outline_to_mind_map_dict,
+    normalize_llm_mind_map_json,
+)
 from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
 from app.services.rag_retriever import RAGRetriever
 
@@ -350,6 +355,150 @@ async def test_rag_retriever_expands_neighbor_window_and_orders_canonically() ->
     retrieved_indices = [chunk.chunk_index for chunk in results]
     # Primary (4, 1) + neighbors (0, 2, 3, 5) sorted canonically -> [0, 1, 2, 3, 4, 5]
     assert retrieved_indices == [0, 1, 2, 3, 4, 5]
+
+
+@pytest.mark.asyncio
+async def test_rag_retriever_stratifies_coverage_for_broad_top_k() -> None:
+    """Verify RAGRetriever includes chunks across the document when top_k >= 10."""
+    dummy_vec = [0.1] * EMBEDDING_DIMENSION
+    all_chunks = [
+        DocumentChunkModel(
+            document_name="genai_lecture.pdf",
+            chunk_index=idx,
+            content=f"Section {idx} content",
+            embedding=dummy_vec,
+        )
+        for idx in range(12)
+    ]
+
+    class BroadFakeRepository:
+        async def search_similar_chunks(
+            self,
+            query_embedding: list[float],
+            top_k: int = 5,
+            document_name: str | None = None,
+        ) -> list[DocumentChunkModel]:
+            return all_chunks[:2]
+
+        async def get_chunks_by_indices(
+            self,
+            document_name: str,
+            chunk_indices: list[int],
+        ) -> list[DocumentChunkModel]:
+            return [all_chunks[i] for i in sorted(chunk_indices) if 0 <= i < len(all_chunks)]
+
+        async def get_chunks_by_document(
+            self,
+            document_name: str,
+        ) -> list[DocumentChunkModel]:
+            return all_chunks
+
+    retriever = RAGRetriever(
+        repository=BroadFakeRepository(),  # type: ignore[arg-type]
+        embedding_service=EmbeddingService(Settings(EMBEDDING_PROVIDER="local")),
+    )
+    results = await retriever.retrieve_relevant_chunks(
+        query="O que é IAG?",
+        top_k=15,
+        document_name="genai_lecture.pdf",
+    )
+
+    assert [chunk.chunk_index for chunk in results] == list(range(12))
+
+
+def test_pedagogical_structurer_reflows_wrapped_pdf_and_filters_author_noise() -> None:
+    """Verify wrapped PDF lines, author titles ('Prof. Dr.'), and dangling prepositions are cleaned."""
+    wrapped_iag_chunks = [
+        (
+            "Fundamentos e Evolução da Inteligência Artificial Generativa\n"
+            "Prof. Dr. Marcos Leandro Hoffmann Souza\n"
+            "## Definição e Distinção\n"
+            "A Inteligência Artificial Generativa (IAG ou\n"
+            "GenAI) destaca-se pela\n"
+            "sua capacidade de criar conteúdo novo e original.\n"
+            "Diferença da IA Tradicional: Enquanto a IA tradicional foca em classificação e previsão, "
+            "a IAG foca na criação de texto, imagens e código."
+        ),
+        (
+            "## Evolução Histórica\n"
+            "Em 1956, ocorreu a Fundação da IA na conferência de Dartmouth.\n"
+            "Em 2014, surgiram as GANs (Redes Adversariais Generativas) para criação de imagens.\n"
+            "Em 2017, a Arquitetura Transformer revolucionou o processamento de linguagem natural."
+        ),
+    ]
+
+    outline = build_pedagogical_outline(
+        query="o que é iag?",
+        context_chunks=wrapped_iag_chunks,
+    )
+    assert outline.language == "pt"
+    assert len(outline.direct_synthesis) >= 30
+    assert len(outline.axes) >= 2
+
+    compiled = compile_outline_to_mind_map_dict(outline)
+    validated = validate_and_parse_mind_map_json(
+        json.dumps(compiled, ensure_ascii=False),
+        source_chunks_used=2,
+        expected_topic="o que é iag?",
+    )
+
+    labels = [node.data.label for node in validated.nodes]
+    assert "Prof" not in labels
+    assert not any(
+        label.lower().split()[-1] in {"seus", "ou", "de", "dos"}
+        for label in labels
+        if label.split()
+    )
+    edge_labels = {edge.label for edge in validated.edges if edge.label}
+    assert "structures into" not in edge_labels
+    assert "encompasses" not in edge_labels
+
+
+def test_normalize_llm_mind_map_json_compiles_outline_and_nested_children() -> None:
+    """Verify LLM outline or nested node output is deterministically compiled into React Flow JSON."""
+    raw_outline = json.dumps(
+        {
+            "topic": "o que é iag?",
+            "synthesis": "A IAG é um ramo da IA focado na criação de novos conteúdos.",
+            "branches": [
+                {
+                    "title": "Definição e Distinção",
+                    "summary": "Conceito central e contraste com IA analítica.",
+                    "relation": "divide-se em",
+                    "concepts": [
+                        {
+                            "label": "Criação de Conteúdo Original",
+                            "summary": "Gera texto, código, áudio e imagens inéditas.",
+                            "category": "concept",
+                            "relation": "caracteriza-se por",
+                        },
+                        {
+                            "label": "Exemplos: ChatGPT e DALL-E",
+                            "summary": "Modelos generativos de texto e imagem.",
+                            "category": "example",
+                            "relation": "exemplificado por",
+                        },
+                    ],
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    normalized = normalize_llm_mind_map_json(
+        raw_output=raw_outline,
+        query="o que é iag?",
+        context_chunks=["A IAG cria conteúdo novo."],
+    )
+    validated = validate_and_parse_mind_map_json(
+        normalized,
+        source_chunks_used=1,
+        expected_topic="o que é iag?",
+    )
+    assert len(validated.nodes) == 4
+    assert len(validated.edges) == 3
+    assert validated.nodes[0].data.summary == "A IAG é um ramo da IA focado na criação de novos conteúdos."
+
 
 
 @pytest.mark.asyncio

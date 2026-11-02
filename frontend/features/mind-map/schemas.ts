@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+export const COVERAGE_OPTIONS = [
+  { value: 5, label: "Essencial (5 trechos)", description: "Foco nos conceitos mais diretos para respostas rápidas." },
+  { value: 10, label: "Detalhada (10 trechos)", description: "Equilíbrio entre conceitos principais, pilares e exemplos." },
+  { value: 15, label: "Ampla (15 trechos)", description: "Cobertura aprofundada conectando múltiplas seções do PDF." },
+  { value: 20, label: "Completa (20 trechos)", description: "Visão global de todo o material (ideal para resumos de capítulos)." },
+] as const;
+
 export const generateMapRequestSchema = z.object({
   query: z.string({ error: "Informe o tema que você quer estudar." })
     .trim()

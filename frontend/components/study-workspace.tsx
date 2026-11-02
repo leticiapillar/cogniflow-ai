@@ -11,7 +11,7 @@ import { StatusMessage } from "@/components/ui/status-message";
 export function StudyWorkspace() {
   const [activeDocument, setActiveDocument] = useState<DocumentUploadResponse | null>(null);
   const queryInput = useRef<HTMLTextAreaElement>(null);
-  const { query, state, updateQuery, generate, reset, cancel } = useGenerateMindMap();
+  const { query, topK, state, updateQuery, updateTopK, generate, reset, cancel } = useGenerateMindMap();
 
   useEffect(() => {
     if (activeDocument) queryInput.current?.focus();
@@ -36,10 +36,13 @@ export function StudyWorkspace() {
           <DocumentUpload onDocumentChange={handleDocumentChange} />
           <MindMapForm
             documentName={activeDocument?.document_name}
+            totalChunks={activeDocument?.total_chunks}
             inputRef={queryInput}
             query={query}
+            topK={topK}
             state={state}
             onQueryChange={updateQuery}
+            onTopKChange={updateTopK}
             onGenerate={() => { void generate(activeDocument?.document_name); }}
             onCancel={cancel}
           />

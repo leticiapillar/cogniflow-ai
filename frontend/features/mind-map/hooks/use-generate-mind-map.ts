@@ -6,6 +6,7 @@ import type { GenerationState } from "../types";
 
 export function useGenerateMindMap() {
   const [query, setQuery] = useState("");
+  const [topK, setTopK] = useState(5);
   const [state, setState] = useState<GenerationState>({ status: "idle" });
   const mounted = useRef(false);
   const version = useRef(0);
@@ -34,6 +35,11 @@ export function useGenerateMindMap() {
     setQuery(value);
   }, [reset]);
 
+  const updateTopK = useCallback((value: number) => {
+    reset();
+    setTopK(value);
+  }, [reset]);
+
   const generate = useCallback(async (documentName?: string) => {
     if (activeRequest.current) return;
 
@@ -41,7 +47,7 @@ export function useGenerateMindMap() {
       setState({ status: "error", error: new ApiError("validation", "Envie um PDF antes de gerar o mapa.") });
       return;
     }
-    const request = generateMapRequestSchema.safeParse({ query, document_name: documentName, top_k: 5 });
+    const request = generateMapRequestSchema.safeParse({ query, document_name: documentName, top_k: topK });
     if (!request.success) {
       setState({ status: "error", error: new ApiError("validation", request.error.issues[0].message) });
       return;
@@ -70,7 +76,7 @@ export function useGenerateMindMap() {
     } finally {
       if (version.current === requestVersion) activeRequest.current = null;
     }
-  }, [query]);
+  }, [query, topK]);
 
-  return { query, state, updateQuery, generate, reset, cancel: reset };
+  return { query, topK, state, updateQuery, updateTopK, generate, reset, cancel: reset };
 }

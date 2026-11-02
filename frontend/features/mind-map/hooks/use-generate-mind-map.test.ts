@@ -149,4 +149,26 @@ describe("useGenerateMindMap", () => {
 
     expect(result.current.state.status).toBe("success");
   });
+
+  it("forwards selected topK coverage and resets state when coverage changes", async () => {
+    generate.mockResolvedValue(createMapResponse());
+
+    const { result } = renderHook(useGenerateMindMap);
+
+    act(() => {
+      result.current.updateQuery(sampleRequest.query);
+      result.current.updateTopK(20);
+    });
+    await act(() => result.current.generate("biologia.pdf"));
+
+    expect(generate).toHaveBeenCalledWith(
+      { ...sampleRequest, top_k: 20 },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(result.current.state.status).toBe("success");
+
+    act(() => result.current.updateTopK(10));
+    expect(result.current.state.status).toBe("idle");
+    expect(result.current.topK).toBe(10);
+  });
 });

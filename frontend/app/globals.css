@@ -126,6 +126,18 @@ body {
   background: var(--accent);
 }
 
+.concept-node-root::before {
+  background: var(--coral);
+}
+
+.concept-node-topic::before {
+  background: #0284c7;
+}
+
+.concept-node-example::before {
+  background: #059669;
+}
+
 .react-flow__node:hover .concept-node {
   border-color: #b8b4f4;
   box-shadow: 0 12px 30px rgba(38, 42, 71, 0.15);

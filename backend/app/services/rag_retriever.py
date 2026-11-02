@@ -70,6 +70,29 @@ class RAGRetriever:
                         neighbor
                     )
 
+        # Stratified section coverage when a specific document is targeted and broader coverage is requested
+        if (
+            document_name
+            and top_k >= 10
+            and hasattr(self._repository, "get_chunks_by_document")
+        ):
+            all_doc_chunks = list(
+                await self._repository.get_chunks_by_document(document_name)
+            )
+            target_budget = min(len(all_doc_chunks), max(top_k, int(top_k * 1.3)))
+            if len(all_doc_chunks) <= target_budget:
+                for chunk in all_doc_chunks:
+                    merged_by_key[(chunk.document_name, chunk.chunk_index)] = chunk
+            elif len(merged_by_key) < target_budget and len(all_doc_chunks) > 0:
+                step = max(1, len(all_doc_chunks) // target_budget)
+                for idx in range(0, len(all_doc_chunks), step):
+                    if len(merged_by_key) >= target_budget:
+                        break
+                    candidate = all_doc_chunks[idx]
+                    merged_by_key[(candidate.document_name, candidate.chunk_index)] = (
+                        candidate
+                    )
+
         ordered_chunks = sorted(
             merged_by_key.values(),
             key=lambda item: (item.document_name, item.chunk_index),

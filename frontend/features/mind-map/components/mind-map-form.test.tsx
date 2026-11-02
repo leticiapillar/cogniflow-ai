@@ -54,3 +54,16 @@ it("associates validation errors with the query and offers retry", () => {
   expect(screen.getByRole("alert").textContent).toContain("3 caracteres");
   expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeTruthy();
 });
+
+it("allows selecting the map coverage (top_k) and displays available document chunks", () => {
+  const onTopKChange = vi.fn();
+
+  render(<MindMapForm {...props()} documentName="biologia.pdf" totalChunks={23} topK={10} onTopKChange={onTopKChange} />);
+
+  expect(screen.getByText(/Material selecionado: biologia\.pdf \(23 trechos\)/)).toBeTruthy();
+  const select = screen.getByLabelText("Abrangência do mapa") as HTMLSelectElement;
+  expect(select.value).toBe("10");
+
+  fireEvent.change(select, { target: { value: "20" } });
+  expect(onTopKChange).toHaveBeenCalledWith(20);
+});

@@ -7,14 +7,20 @@ from typing import Sequence
 import httpx
 
 from app.core.config import Settings, get_settings
+from app.services.pedagogical_structurer import (
+    build_pedagogical_outline,
+    compile_outline_to_mind_map_dict,
+    normalize_llm_mind_map_json,
+)
 
 logger = logging.getLogger("cogniflow.services.llm_provider")
 
 GEMINI_MIND_MAP_RESPONSE_SCHEMA: dict[str, object] = {
     "type": "OBJECT",
-    "required": ["topic", "nodes", "edges"],
+    "required": ["topic", "pedagogical_synthesis", "nodes", "edges"],
     "properties": {
         "topic": {"type": "STRING"},
+        "pedagogical_synthesis": {"type": "STRING"},
         "nodes": {
             "type": "ARRAY",
             "items": {
@@ -84,7 +90,7 @@ class BaseLLMProvider(ABC):
 
 
 class ContextGroundedLocalLLMProvider(BaseLLMProvider):
-    """Deterministic, context-grounded JSON generator extracting concepts directly from RAG chunks."""
+    """Deterministic, context-grounded JSON generator extracting concepts via pedagogical structuring."""
 
     async def generate_mind_map_json(
         self,
@@ -93,180 +99,25 @@ class ContextGroundedLocalLLMProvider(BaseLLMProvider):
         query: str,
         context_chunks: Sequence[str],
     ) -> str:
-        """Extract key concepts and summaries from retrieved chunks into strict hierarchical JSON."""
-        root_id = "node-root"
-        nodes: list[dict[str, object]] = [
-            {
-                "id": root_id,
-                "type": "input",
-                "data": {
-                    "label": query[:120],
-                    "summary": f"Core visual map grounded in {len(context_chunks)} retrieved context block(s).",
-                    "category": "root",
-                },
-                "position": {"x": 0.0, "y": 0.0},
-            }
-        ]
-        edges: list[dict[str, object]] = []
-
-        extracted_items = self._extract_concepts_from_chunks(query, context_chunks)
-        if len(extracted_items) >= 4:
-            # Group extracted items into 2-level hierarchy (root -> topic pillar -> concepts)
-            pillar_size = 2 if len(extracted_items) <= 5 else 3
-            concept_counter = 1
-            for group_idx, start in enumerate(
-                range(0, len(extracted_items), pillar_size), start=1
-            ):
-                group = extracted_items[start : start + pillar_size]
-                if not group:
-                    continue
-                pillar_label, pillar_summary = group[0]
-                topic_id = f"node-topic-{group_idx}"
-                nodes.append(
-                    {
-                        "id": topic_id,
-                        "type": "default",
-                        "data": {
-                            "label": pillar_label[:180],
-                            "summary": pillar_summary[:800],
-                            "category": "topic",
-                        },
-                        "position": {"x": float((group_idx - 1) * 280), "y": 140.0},
-                    }
-                )
-                edges.append(
-                    {
-                        "id": f"edge-root-topic-{group_idx}",
-                        "source": root_id,
-                        "target": topic_id,
-                        "label": "structures into",
-                        "animated": False,
-                    }
-                )
-                for child_label, child_summary in group[1:]:
-                    concept_id = f"node-{concept_counter}"
-                    concept_counter += 1
-                    nodes.append(
-                        {
-                            "id": concept_id,
-                            "type": "default",
-                            "data": {
-                                "label": child_label[:180],
-                                "summary": child_summary[:800],
-                                "category": "concept",
-                            },
-                            "position": {
-                                "x": float((group_idx - 1) * 280),
-                                "y": 280.0,
-                            },
-                        }
-                    )
-                    edges.append(
-                        {
-                            "id": f"edge-topic-{group_idx}-concept-{concept_counter - 1}",
-                            "source": topic_id,
-                            "target": concept_id,
-                            "label": "encompasses",
-                            "animated": False,
-                        }
-                    )
-        else:
-            for index, (label, summary) in enumerate(extracted_items, start=1):
-                node_id = f"node-{index}"
-                nodes.append(
-                    {
-                        "id": node_id,
-                        "type": "default",
-                        "data": {
-                            "label": label[:180],
-                            "summary": summary[:800],
-                            "category": "topic" if index == 1 else "concept",
-                        },
-                        "position": {"x": float((index - 1) * 220), "y": 140.0},
-                    }
-                )
-                edges.append(
-                    {
-                        "id": f"edge-root-{index}",
-                        "source": root_id,
-                        "target": node_id,
-                        "label": "explains",
-                        "animated": False,
-                    }
-                )
-
-        payload = {
-            "topic": query,
-            "nodes": nodes,
-            "edges": edges,
-        }
+        """Synthesize and structure retrieved chunks into a pedagogical hierarchy compiled to strict JSON."""
+        outline = build_pedagogical_outline(
+            query=query,
+            context_chunks=context_chunks,
+            max_concepts=12,
+        )
+        payload = compile_outline_to_mind_map_dict(outline)
         return json.dumps(payload, ensure_ascii=False)
-
-    def _extract_concepts_from_chunks(
-        self, query: str, context_chunks: Sequence[str]
-    ) -> list[tuple[str, str]]:
-        """Derive structured (label, summary) pairs directly from the retrieved text blocks."""
-        if not context_chunks:
-            return [
-                (
-                    f"Overview: {query[:60]}",
-                    f"Fundamental concepts related to {query}.",
-                )
-            ]
-
-        concepts: list[tuple[str, str]] = []
-        seen_labels: set[str] = set()
-
-        for chunk in context_chunks:
-            lines = [
-                line.strip(" #\t●*-")
-                for line in chunk.splitlines()
-                if line.strip(" #\t●*-")
-            ]
-            if not lines:
-                continue
-
-            for line in lines:
-                colon_parts = line.split(":", 1)
-                if 1 <= len(colon_parts[0].split()) <= 7 and len(colon_parts) == 2:
-                    candidate_label = colon_parts[0].strip()
-                    candidate_summary = colon_parts[1].strip() or line
-                else:
-                    sentences = [
-                        s.strip() for s in re.split(r"(?<=[.!?])\s+", line) if s.strip()
-                    ]
-                    first_sentence = sentences[0] if sentences else line
-                    words = first_sentence.split()
-                    candidate_label = " ".join(words[:6]).rstrip(".,;:")
-                    candidate_summary = first_sentence
-
-                normalized_key = candidate_label.lower()
-                if (
-                    len(candidate_label) >= 3
-                    and normalized_key not in seen_labels
-                ):
-                    seen_labels.add(normalized_key)
-                    concepts.append((candidate_label, candidate_summary))
-                if len(concepts) >= 8:
-                    return concepts
-
-        if not concepts:
-            concepts.append(
-                (
-                    "Core Material Concept",
-                    context_chunks[0][:300],
-                )
-            )
-        return concepts
 
 
 class GeminiLLMProvider(BaseLLMProvider):
     """Google Gemini API provider configured for strict JSON Mode output."""
 
     FALLBACK_MODELS: tuple[str, ...] = (
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-flash-latest",
         "gemini-3.8-flash",
         "gemini-3.7-flash",
-        "gemini-flash-latest",
     )
 
     def __init__(self, settings: Settings | None = None) -> None:
@@ -318,7 +169,7 @@ class GeminiLLMProvider(BaseLLMProvider):
                 )
                 try:
                     response = await client.post(url, json=payload)
-                    if response.status_code in {429, 500, 502, 503, 504}:
+                    if response.status_code in {404, 429, 500, 502, 503, 504}:
                         logger.warning(
                             "Gemini model '%s' returned HTTP %d; trying next candidate model.",
                             model_name,
@@ -327,7 +178,12 @@ class GeminiLLMProvider(BaseLLMProvider):
                         response.raise_for_status()
                     response.raise_for_status()
                     data = response.json()
-                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    return normalize_llm_mind_map_json(
+                        raw_output=raw_text,
+                        query=query,
+                        context_chunks=context_chunks,
+                    )
                 except Exception as exc:
                     last_exc = exc
                     continue
@@ -367,17 +223,22 @@ class OllamaLLMProvider(BaseLLMProvider):
             "stream": False,
             "options": {
                 "temperature": self._settings.llm_temperature,
-                "num_ctx": 4096,
-                "num_predict": 900,
+                "num_ctx": 8192,
+                "num_predict": 2500,
             },
         }
 
         try:
-            async with httpx.AsyncClient(timeout=110.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.post(url, json=payload)
                 response.raise_for_status()
                 data = response.json()
-                return data["message"]["content"]
+                raw_text = data["message"]["content"]
+                return normalize_llm_mind_map_json(
+                    raw_output=raw_text,
+                    query=query,
+                    context_chunks=context_chunks,
+                )
         except Exception as exc:
             logger.warning(
                 "Ollama LLM request failed or timed out (%s); falling back to ContextGroundedLocalLLMProvider.",

@@ -1,8 +1,10 @@
+import { getCategoryMeta } from "../graph-config";
 import type { GenerateMapResponse, MindMapNode } from "../types";
 
 export function ConceptDetails({ node, map }: { node?: MindMapNode; map: GenerateMapResponse }) {
   const labels = new Map(map.nodes.map((item) => [item.id, item.data.label]));
   const relations = node ? map.edges.filter((edge) => edge.source === node.id || edge.target === node.id) : [];
+  const meta = node ? getCategoryMeta(node.data.category, node.type === "input") : null;
 
   return (
     <aside aria-labelledby="concept-details-heading" className="rounded-xl border border-border bg-background/70 p-4">
@@ -11,8 +13,12 @@ export function ConceptDetails({ node, map }: { node?: MindMapNode; map: Generat
         <h3 id="concept-details-heading" className="font-semibold">Detalhes do conceito</h3>
       </div>
       <div aria-live="polite" className="mt-2 space-y-3 break-words text-sm leading-relaxed">
-        {node ? (
+        {node && meta ? (
           <>
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className={`size-2 rounded-full ${meta.dotClass}`} />
+              <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted">{meta.label}</span>
+            </div>
             <p className="font-semibold">{node.data.label}</p>
             <p className="whitespace-pre-line text-muted">{node.data.summary || "Resumo não informado."}</p>
             {relations.length > 0 && (

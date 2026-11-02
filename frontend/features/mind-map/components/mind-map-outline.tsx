@@ -1,3 +1,4 @@
+import { getCategoryMeta } from "../graph-config";
 import type { GenerateMapResponse } from "../types";
 
 export function MindMapOutline({ map }: { map: GenerateMapResponse }) {
@@ -7,14 +8,21 @@ export function MindMapOutline({ map }: { map: GenerateMapResponse }) {
       <h3 className="font-semibold">Leitura dos conceitos</h3>
 
       <ol aria-label="Conceitos gerados" className="space-y-4">
-        {map.nodes.map((node) => (
-          <li key={node.id} className="break-words rounded-xl border border-border bg-background/70 p-4 shadow-sm">
-            <h4 className="font-semibold">{node.data.label}</h4>
-            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted">
-              {node.data.summary || "Resumo não informado."}
-            </p>
-          </li>
-        ))}
+        {map.nodes.map((node) => {
+          const meta = getCategoryMeta(node.data.category, node.type === "input");
+          return (
+            <li key={node.id} className="break-words rounded-xl border border-border bg-background/70 p-4 shadow-sm">
+              <div className="mb-1 flex items-center gap-2">
+                <span aria-hidden="true" className={`size-2 rounded-full ${meta.dotClass}`} />
+                <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted">{meta.label}</span>
+              </div>
+              <h4 className="font-semibold">{node.data.label}</h4>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted">
+                {node.data.summary || "Resumo não informado."}
+              </p>
+            </li>
+          );
+        })}
       </ol>
 
       <h3 className="font-semibold">Relações entre conceitos</h3>
