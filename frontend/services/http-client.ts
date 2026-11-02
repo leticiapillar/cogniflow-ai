@@ -55,7 +55,7 @@ function getHttpError(status: number): ApiError {
 
 export async function requestJson(
   path: string,
-  { timeoutMs = 120_000, signal, ...options }: RequestOptions = {},
+  { timeoutMs = 300_000, signal, ...options }: RequestOptions = {},
 ): Promise<unknown> {
   const url = getApiUrl(path);
 

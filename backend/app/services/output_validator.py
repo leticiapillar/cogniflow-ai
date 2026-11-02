@@ -4,7 +4,7 @@ import re
 
 from pydantic import ValidationError
 
-from app.schemas.mind_map import GenerateMapResponse
+from app.schemas.mind_map import GenerateMapResponse, MindMapEdge, MindMapNode
 
 logger = logging.getLogger("cogniflow.services.output_validator")
 
@@ -59,6 +59,75 @@ def _replace_root_label(parsed_dict: dict[str, object], expected_topic: str) -> 
         root_node["data"]["label"] = expected_topic[:200]
 
 
+def _resolve_root_node(nodes: list[MindMapNode]) -> MindMapNode:
+    """Identify the primary root node of the mind map."""
+    for node in nodes:
+        if node.data.category and node.data.category.lower() == "root":
+            return node
+    for node in nodes:
+        if node.type == "input":
+            return node
+    return nodes[0]
+
+
+def _ensure_graph_connectivity(response_model: GenerateMapResponse) -> None:
+    """Connect any valid but disconnected nodes (or subgraphs) to the root node."""
+    if len(response_model.nodes) <= 1:
+        return
+
+    root_node = _resolve_root_node(response_model.nodes)
+    adjacency: dict[str, set[str]] = {node.id: set() for node in response_model.nodes}
+    incoming_count: dict[str, int] = {node.id: 0 for node in response_model.nodes}
+    existing_edge_ids: set[str] = {edge.id for edge in response_model.edges}
+
+    for edge in response_model.edges:
+        adjacency[edge.source].add(edge.target)
+        adjacency[edge.target].add(edge.source)
+        incoming_count[edge.target] = incoming_count.get(edge.target, 0) + 1
+
+    visited: set[str] = {root_node.id}
+    queue: list[str] = [root_node.id]
+    while queue:
+        current = queue.pop(0)
+        for neighbor in adjacency.get(current, ()):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append(neighbor)
+
+    for node in response_model.nodes:
+        if node.id in visited:
+            continue
+        # Prefer attaching the head of an unvisited component (node with no incoming edges)
+        if incoming_count.get(node.id, 0) == 0 or node.id not in visited:
+            candidate_edge_id = f"edge-auto-{root_node.id}-{node.id}"
+            suffix = 1
+            while candidate_edge_id in existing_edge_ids:
+                suffix += 1
+                candidate_edge_id = f"edge-auto-{root_node.id}-{node.id}-{suffix}"
+            existing_edge_ids.add(candidate_edge_id)
+
+            response_model.edges.append(
+                MindMapEdge(
+                    id=candidate_edge_id,
+                    source=root_node.id,
+                    target=node.id,
+                    label=None,
+                    animated=False,
+                )
+            )
+            adjacency[root_node.id].add(node.id)
+            adjacency[node.id].add(root_node.id)
+
+            comp_queue = [node.id]
+            visited.add(node.id)
+            while comp_queue:
+                curr = comp_queue.pop(0)
+                for neigh in adjacency.get(curr, ()):
+                    if neigh not in visited:
+                        visited.add(neigh)
+                        comp_queue.append(neigh)
+
+
 def validate_and_parse_mind_map_json(
     raw_output: str,
     source_chunks_used: int = 0,
@@ -103,7 +172,13 @@ def validate_and_parse_mind_map_json(
             )
         node_ids.add(node.id)
 
+    edge_ids: set[str] = set()
     for edge in response_model.edges:
+        if edge.id in edge_ids:
+            raise LLMOutputValidationError(
+                f"Structural hallucination detected: duplicate edge id '{edge.id}'."
+            )
+        edge_ids.add(edge.id)
         if edge.source not in node_ids:
             raise LLMOutputValidationError(
                 f"Structural hallucination detected: edge '{edge.id}' references nonexistent source node '{edge.source}'."
@@ -117,4 +192,5 @@ def validate_and_parse_mind_map_json(
                 f"Structural hallucination detected: edge '{edge.id}' forms a self-loop on node '{edge.source}'."
             )
 
+    _ensure_graph_connectivity(response_model)
     return response_model

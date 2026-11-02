@@ -53,6 +53,14 @@ def test_semantic_chunking_by_headers_and_overlap() -> None:
     assert len(chunks) >= 4
     assert all(len(chunk) <= 350 for chunk in chunks)
 
+    eukaryotic_chunks = [
+        chunk for chunk in chunks if "oxidative phosphorylation" in chunk
+    ]
+    assert len(eukaryotic_chunks) >= 2
+    assert all(
+        chunk.startswith("## 1.1 Eukaryotic Cells\n") for chunk in eukaryotic_chunks
+    )
+
 
 def test_prompt_injection_detection_and_sanitization() -> None:
     """Verify prompt injection payloads are detected and blocked."""

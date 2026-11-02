@@ -5,7 +5,10 @@ from httpx import AsyncClient
 import pytest
 
 from app.core.config import Settings
+from app.repositories.models import DocumentChunkModel, EMBEDDING_DIMENSION
+from app.services.embeddings import EmbeddingService
 from app.services.llm_provider import (
+    GEMINI_MIND_MAP_RESPONSE_SCHEMA,
     ContextGroundedLocalLLMProvider,
     GeminiLLMProvider,
     OllamaLLMProvider,
@@ -16,6 +19,7 @@ from app.services.output_validator import (
     validate_and_parse_mind_map_json,
 )
 from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
+from app.services.rag_retriever import RAGRetriever
 
 SAMPLE_PDF_PATH = (
     Path(__file__).resolve().parents[2] / "Proposta_Projeto_CogniFlow_AI.pdf"
@@ -30,13 +34,17 @@ def test_system_prompt_is_english_and_enforces_strict_json() -> None:
     assert "<RETRIEVED_CONTEXT>" in MIND_MAP_SYSTEM_PROMPT
     assert 'The "topic" field MUST reproduce the text inside <USER_QUERY> exactly' in MIND_MAP_SYSTEM_PROMPT
     assert "same language used in <USER_QUERY>" in MIND_MAP_SYSTEM_PROMPT
+    assert "PEDAGOGICAL HIERARCHY AND TAXONOMY RULES" in MIND_MAP_SYSTEM_PROMPT
+    assert '"category": "topic"' in MIND_MAP_SYSTEM_PROMPT
 
     user_prompt = build_user_prompt(
         query="Clean Architecture and pgvector",
         context_chunks=["FastAPI orchestrator with PostgreSQL and pgvector."],
     )
     assert "<USER_QUERY>" in user_prompt
+    assert "[Chunk 1 of 1]" in user_prompt
     assert "FastAPI orchestrator with PostgreSQL and pgvector." in user_prompt
+    assert "multi-level hierarchy" in user_prompt
     assert "Preserve the USER_QUERY exactly as the topic" in user_prompt
 
 
@@ -182,6 +190,82 @@ def test_output_validator_rejects_dangling_edges_and_duplicate_nodes() -> None:
     with pytest.raises(LLMOutputValidationError, match="self-loop"):
         validate_and_parse_mind_map_json(self_loop_payload)
 
+    duplicate_edge_payload = json.dumps(
+        {
+            "topic": "Biology",
+            "nodes": [
+                {
+                    "id": "node-root",
+                    "type": "input",
+                    "data": {"label": "Cell", "summary": "Basic unit", "category": "root"},
+                },
+                {
+                    "id": "node-1",
+                    "type": "default",
+                    "data": {"label": "Nucleus", "summary": "Control", "category": "concept"},
+                },
+            ],
+            "edges": [
+                {"id": "edge-dup", "source": "node-root", "target": "node-1"},
+                {"id": "edge-dup", "source": "node-root", "target": "node-1"},
+            ],
+        }
+    )
+    with pytest.raises(LLMOutputValidationError, match="duplicate edge id"):
+        validate_and_parse_mind_map_json(duplicate_edge_payload)
+
+
+def test_output_validator_connects_orphan_nodes_to_root() -> None:
+    """Verify disconnected valid nodes are automatically attached to the root node."""
+    orphan_payload = json.dumps(
+        {
+            "topic": "Inteligência Artificial Generativa",
+            "nodes": [
+                {
+                    "id": "node-root",
+                    "type": "input",
+                    "data": {
+                        "label": "Inteligência Artificial Generativa",
+                        "summary": "Criação de conteúdo novo.",
+                        "category": "root",
+                    },
+                },
+                {
+                    "id": "node-topic-1",
+                    "type": "default",
+                    "data": {
+                        "label": "Fundamentos da IAG",
+                        "summary": "Três pilares principais.",
+                        "category": "topic",
+                    },
+                },
+                {
+                    "id": "node-orphan",
+                    "type": "default",
+                    "data": {
+                        "label": "Evolução Histórica",
+                        "summary": "Marcos de 1956 a 2022+.",
+                        "category": "topic",
+                    },
+                },
+            ],
+            "edges": [
+                {
+                    "id": "edge-1",
+                    "source": "node-root",
+                    "target": "node-topic-1",
+                    "label": "divide-se em",
+                }
+            ],
+        }
+    )
+    validated = validate_and_parse_mind_map_json(orphan_payload)
+    assert len(validated.edges) == 2
+    assert any(
+        edge.source == "node-root" and edge.target == "node-orphan"
+        for edge in validated.edges
+    )
+
 
 @pytest.mark.asyncio
 async def test_llm_provider_abstraction_factory_and_switching() -> None:
@@ -206,11 +290,66 @@ async def test_llm_provider_abstraction_factory_and_switching() -> None:
         context_chunks=[
             "Backend Orquestrador: Construído em Python utilizando FastAPI e Clean Architecture.",
             "Banco de Dados Vetorial: PostgreSQL com a extensão pgvector via Docker Compose.",
+            "Pipeline RAG: Extração de PDF, sanitização, chunking semântico e embeddings.",
+            "Validação Estrutural: Modelos Pydantic garantem integridade de nós e arestas.",
         ],
     )
-    validated = validate_and_parse_mind_map_json(raw_json, source_chunks_used=2)
-    assert len(validated.nodes) >= 3
-    assert len(validated.edges) >= 2
+    validated = validate_and_parse_mind_map_json(raw_json, source_chunks_used=4)
+    assert len(validated.nodes) >= 5
+    assert len(validated.edges) >= 4
+    categories = {node.data.category for node in validated.nodes}
+    assert "root" in categories
+    assert "topic" in categories
+    assert "concept" in categories
+    assert GEMINI_MIND_MAP_RESPONSE_SCHEMA["type"] == "OBJECT"
+    assert "nodes" in GEMINI_MIND_MAP_RESPONSE_SCHEMA["properties"]  # type: ignore[operator]
+
+
+@pytest.mark.asyncio
+async def test_rag_retriever_expands_neighbor_window_and_orders_canonically() -> None:
+    """Verify RAGRetriever expands adjacent chunks and returns results in ascending chunk_index order."""
+    dummy_vec = [0.1] * EMBEDDING_DIMENSION
+    all_chunks = {
+        idx: DocumentChunkModel(
+            document_name="genai_lecture.pdf",
+            chunk_index=idx,
+            content=f"Section {idx} content",
+            embedding=dummy_vec,
+        )
+        for idx in range(6)
+    }
+
+    class FakeRepository:
+        async def search_similar_chunks(
+            self,
+            query_embedding: list[float],
+            top_k: int = 5,
+            document_name: str | None = None,
+        ) -> list[DocumentChunkModel]:
+            # Simulate cosine similarity returning out-of-order chunks (4, then 1)
+            return [all_chunks[4], all_chunks[1]]
+
+        async def get_chunks_by_indices(
+            self,
+            document_name: str,
+            chunk_indices: list[int],
+        ) -> list[DocumentChunkModel]:
+            return [all_chunks[i] for i in sorted(chunk_indices) if i in all_chunks]
+
+    retriever = RAGRetriever(
+        repository=FakeRepository(),  # type: ignore[arg-type]
+        embedding_service=EmbeddingService(Settings(EMBEDDING_PROVIDER="local")),
+    )
+    results = await retriever.retrieve_relevant_chunks(
+        query="Generative AI Foundations and History",
+        top_k=2,
+        document_name="genai_lecture.pdf",
+        neighbor_window=1,
+    )
+
+    retrieved_indices = [chunk.chunk_index for chunk in results]
+    # Primary (4, 1) + neighbors (0, 2, 3, 5) sorted canonically -> [0, 1, 2, 3, 4, 5]
+    assert retrieved_indices == [0, 1, 2, 3, 4, 5]
 
 
 @pytest.mark.asyncio

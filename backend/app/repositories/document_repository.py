@@ -96,6 +96,25 @@ class DocumentRepository:
         result = await self._session.execute(statement)
         return result.scalars().all()
 
+    async def get_chunks_by_indices(
+        self,
+        document_name: str,
+        chunk_indices: Sequence[int],
+    ) -> Sequence[DocumentChunkModel]:
+        """Retrieve specific chunks for a document matching the requested chunk indices."""
+        if not chunk_indices:
+            return []
+        statement = (
+            select(DocumentChunkModel)
+            .where(
+                DocumentChunkModel.document_name == document_name,
+                DocumentChunkModel.chunk_index.in_(list(chunk_indices)),
+            )
+            .order_by(DocumentChunkModel.chunk_index.asc())
+        )
+        result = await self._session.execute(statement)
+        return result.scalars().all()
+
     async def search_similar_chunks(
         self,
         query_embedding: list[float],
