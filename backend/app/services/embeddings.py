@@ -84,13 +84,15 @@ class EmbeddingService(Embeddings):
 
     def _embed_with_gemini(self, text: str) -> list[float]:
         """Request 768-d embedding from Google Gemini API with local fallback."""
+        model_name = self._settings.gemini_embedding_model.removeprefix("models/")
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"text-embedding-004:embedContent?key={self._settings.gemini_api_key}"
+            f"{model_name}:embedContent?key={self._settings.gemini_api_key}"
         )
         payload = {
-            "model": "models/text-embedding-004",
+            "model": f"models/{model_name}",
             "content": {"parts": [{"text": text}]},
+            "outputDimensionality": EMBEDDING_DIMENSION,
         }
         try:
             with httpx.Client(timeout=15.0) as client:

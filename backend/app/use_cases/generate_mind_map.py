@@ -5,8 +5,15 @@ from app.core.config import Settings, get_settings
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.mind_map import GenerateMapRequest, GenerateMapResponse
 from app.services.embeddings import EmbeddingService
-from app.services.llm_provider import BaseLLMProvider, get_llm_provider
-from app.services.output_validator import validate_and_parse_mind_map_json
+from app.services.llm_provider import (
+    BaseLLMProvider,
+    ContextGroundedLocalLLMProvider,
+    get_llm_provider,
+)
+from app.services.output_validator import (
+    LLMOutputValidationError,
+    validate_and_parse_mind_map_json,
+)
 from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
 from app.services.rag_retriever import RAGRetriever
 
@@ -61,12 +68,33 @@ class GenerateMindMapUseCase:
         )
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        validated_response = validate_and_parse_mind_map_json(
-            raw_output=raw_llm_json,
-            source_chunks_used=len(context_chunks),
-            generation_latency_ms=elapsed_ms,
-            expected_topic=request.query,
-        )
+        try:
+            validated_response = validate_and_parse_mind_map_json(
+                raw_output=raw_llm_json,
+                source_chunks_used=len(context_chunks),
+                generation_latency_ms=elapsed_ms,
+                expected_topic=request.query,
+            )
+        except LLMOutputValidationError as exc:
+            if isinstance(self._llm_provider, ContextGroundedLocalLLMProvider):
+                raise
+            logger.warning(
+                "LLM output failed validation (%s); falling back to ContextGroundedLocalLLMProvider.",
+                exc,
+            )
+            fallback_json = await ContextGroundedLocalLLMProvider().generate_mind_map_json(
+                system_prompt=MIND_MAP_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                query=request.query,
+                context_chunks=context_chunks,
+            )
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            validated_response = validate_and_parse_mind_map_json(
+                raw_output=fallback_json,
+                source_chunks_used=len(context_chunks),
+                generation_latency_ms=elapsed_ms,
+                expected_topic=request.query,
+            )
         logger.info(
             "Generated validated mind map with %d nodes and %d edges (chunks=%d, latency=%.2f ms).",
             len(validated_response.nodes),

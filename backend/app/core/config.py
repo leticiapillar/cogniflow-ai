@@ -1,8 +1,12 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+ENV_FILE_PATH = BACKEND_DIR / ".env"
 
 SENSITIVE_FIELD_NAMES = frozenset(
     {
@@ -48,7 +52,10 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[str] = Field(
         default=None, alias="GEMINI_API_KEY", repr=False
     )
-    gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.8-flash", alias="GEMINI_MODEL")
+    gemini_embedding_model: str = Field(
+        default="gemini-embedding-001", alias="GEMINI_EMBEDDING_MODEL"
+    )
 
     ollama_base_url: str = Field(
         default="http://localhost:11434", alias="OLLAMA_BASE_URL"
@@ -59,7 +66,7 @@ class Settings(BaseSettings):
     ollama_llm_model: str = Field(default="llama3.2", alias="OLLAMA_LLM_MODEL")
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(ENV_FILE_PATH, ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,

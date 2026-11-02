@@ -177,11 +177,20 @@ class GeminiLLMProvider(BaseLLMProvider):
             },
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+        except Exception as exc:
+            logger.warning(
+                "Gemini LLM request failed (%s); falling back to ContextGroundedLocalLLMProvider.",
+                exc,
+            )
+            return await self._fallback.generate_mind_map_json(
+                system_prompt, user_prompt, query, context_chunks
+            )
 
 
 class OllamaLLMProvider(BaseLLMProvider):
@@ -189,6 +198,7 @@ class OllamaLLMProvider(BaseLLMProvider):
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
+        self._fallback = ContextGroundedLocalLLMProvider()
 
     async def generate_mind_map_json(
         self,
@@ -197,7 +207,7 @@ class OllamaLLMProvider(BaseLLMProvider):
         query: str,
         context_chunks: Sequence[str],
     ) -> str:
-        """Invoke local Ollama /api/chat endpoint with format='json'."""
+        """Invoke local Ollama /api/chat endpoint with format='json' and local fallback."""
         url = f"{self._settings.ollama_base_url.rstrip('/')}/api/chat"
         payload = {
             "model": self._settings.ollama_llm_model,
@@ -207,14 +217,27 @@ class OllamaLLMProvider(BaseLLMProvider):
             ],
             "format": "json",
             "stream": False,
-            "options": {"temperature": self._settings.llm_temperature},
+            "options": {
+                "temperature": self._settings.llm_temperature,
+                "num_ctx": 4096,
+                "num_predict": 900,
+            },
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            return data["message"]["content"]
+        try:
+            async with httpx.AsyncClient(timeout=110.0) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return data["message"]["content"]
+        except Exception as exc:
+            logger.warning(
+                "Ollama LLM request failed or timed out (%s); falling back to ContextGroundedLocalLLMProvider.",
+                exc,
+            )
+            return await self._fallback.generate_mind_map_json(
+                system_prompt, user_prompt, query, context_chunks
+            )
 
 
 def get_llm_provider(settings: Settings | None = None) -> BaseLLMProvider:
