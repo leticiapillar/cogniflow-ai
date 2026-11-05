@@ -18,10 +18,11 @@ from app.schemas.tutor import (
 )
 from app.services.embeddings import BaseEmbeddingProvider
 from app.services.llm_provider import BaseLLMProvider, LLMProviderError
+from app.services.prompts import rewrite_question, tutor_answer
+from app.services.prompts.profiles import DEFAULT_PROFILE, AccessibilityProfile
 from app.services.rag_retriever import RAGRetriever, RetrievalResult
 from app.services.structured_output import StructuredOutputError, generate_structured
 from app.services.text_processing import prepare_chunk_text
-from app.services.tutor import prompts
 from app.services.tutor.llm_schemas import StandaloneQuestion, TutorAnswer
 from app.use_cases.errors import DocumentNotFoundError, EmbeddingModelMismatchError
 
@@ -58,6 +59,7 @@ class AskTutorUseCase:
         llm_provider: BaseLLMProvider,
         top_k: int,
         min_similarity: float,
+        profile: AccessibilityProfile = DEFAULT_PROFILE,
     ) -> None:
         self._session = session
         self._repository = DocumentRepository(session)
@@ -66,6 +68,7 @@ class AskTutorUseCase:
         self._retriever = RAGRetriever(self._repository, embedding_provider)
         self._top_k = top_k
         self._min_similarity = min_similarity
+        self._profile = profile
 
     async def _load_map_nodes(self, document_id: uuid.UUID) -> list[dict[str, Any]]:
         result = await self._session.execute(
@@ -88,8 +91,8 @@ class AskTutorUseCase:
 
         rewritten = await generate_structured(
             self._llm,
-            prompts.REWRITE_SYSTEM_PROMPT,
-            prompts.build_rewrite_prompt(request.history, request.question),
+            rewrite_question.system_prompt(),
+            rewrite_question.user_prompt(request.history, request.question),
             StandaloneQuestion,
             validate,
         )
@@ -193,8 +196,8 @@ class AskTutorUseCase:
         try:
             answer = await generate_structured(
                 self._llm,
-                prompts.ANSWER_SYSTEM_PROMPT,
-                prompts.build_answer_prompt(question, retrieval.chunks, request.history, concept_label),
+                tutor_answer.system_prompt(self._profile),
+                tutor_answer.user_prompt(question, retrieval.chunks, request.history, concept_label),
                 TutorAnswer,
                 validate,
             )

@@ -2,7 +2,7 @@
 
 **Traduzindo Texto Denso em Aprendizado Visual**
 
-O **CogniFlow AI** é uma plataforma educacional assistiva que utiliza **RAG (Retrieval-Augmented Generation)** e **IA Generativa** para converter materiais acadêmicos densos (PDFs, apostilas e transcrições) em mapas mentais visuais estruturados, reduzindo a sobrecarga cognitiva para estudantes surdos (Português como L2) e neurodivergentes (TDAH/TEA).
+O **CogniFlow AI** é um **tutor de aula para alunos neurodivergentes (TDAH e TEA)**. A partir do PDF da aula, ele monta um **mapa mental do material inteiro** (map-reduce com IA generativa) e responde às **dúvidas do aluno** buscando apenas no conteúdo do PDF (**RAG — Retrieval-Augmented Generation**), reduzindo a sobrecarga cognitiva do estudo.
 
 ![Interface do CogniFlow AI](docs/cogniflow-interface.png)
 
@@ -12,10 +12,10 @@ O **CogniFlow AI** é uma plataforma educacional assistiva que utiliza **RAG (Re
 
 - **Mapa Mental do Material Inteiro (map-reduce)**: cada seção do PDF é lida separadamente pelo LLM (*map*) e os conceitos são unidos e organizados em uma árvore **Tema Central (`root`) → Eixos de Estudo numerados (`topic`, de 3 a 5) → Conceitos (`concept`, até 5 por eixo) → Exemplos (`example`, até 2 por conceito)** (*reduce*). Cada nó cita os trechos de origem do PDF, e cada tipo de relação aparece sempre com o mesmo verbo (vocabulário controlado).
 - **Falhas Explícitas, sem Substitutos**: se uma seção não puder ser processada, o mapa é entregue como `partial`, indicando a seção, que pode ser reprocessada sozinha. Nenhum conteúdo é gerado por regras fixas no lugar da IA.
-- **Acessibilidade Linguística e Cognitiva (Surdos, TDAH e TEA)**:
-  - **Surdos (Português L2)**: Frases em ordem direta (`Sujeito → Verbo → Objeto`) e voz ativa, evitando subordinações longas.
-  - **TEA**: Linguagem 100% literal e objetiva, sem metáforas ou ambiguidades.
-  - **TDAH**: Expansão de siglas na primeira menção, diferenciação visual semântica por cores/categorias e prévia do resumo diretamente nos cartões do grafo para reduzir a atenção dividida (*split-attention effect*).
+- **Acessibilidade Linguística e Cognitiva (TDAH e TEA)**: todo texto gerado (mapa e respostas do tutor) segue o perfil de acessibilidade neurodivergente:
+  - **TEA**: linguagem literal e concreta, sem metáforas ou ambiguidades, e sempre a mesma estrutura de resposta.
+  - **TDAH**: frases curtas em ordem direta, uma ideia por frase, informação principal primeiro e siglas por extenso na primeira menção, além da diferenciação visual por categorias e da prévia do resumo nos cartões do grafo (redução do *split-attention effect*).
+  - As regras ficam em perfis (`AccessibilityProfile`, em `backend/app/services/prompts/profiles.py`), separados das instruções de cada tarefa: novos públicos, como estudantes surdos, poderão ser atendidos no futuro com um novo perfil.
 - **Alternância Visual / Textual sem Perda de Estado**: Transição imediata entre o **Mapa** interativo (React Flow + layout automático Dagre) e a visualização em **Lista** estruturada (acessível para leitores de tela e navegação integral por teclado), preservando posições, zoom e nó selecionado.
 - **IA 100% Local com Ollama**: LLM `llama3.2:3b` e embeddings `bge-m3` executados na própria máquina (privacidade LGPD), com verificação de prontidão em `GET /api/health`. As interfaces de provedor permitem reintroduzir outros serviços, como o Google Gemini, no futuro.
 
@@ -41,7 +41,7 @@ cogniflow-ai/
 │   │   ├── repositories/                     # Persistência e busca por similaridade vetorial (pgvector)
 │   │   ├── routers/                          # Endpoints REST (/api/health, /api/documents, /mind-map, /ask)
 │   │   ├── schemas/                          # Contratos estritos de entrada/saída (Pydantic)
-│   │   ├── services/                         # PDF parser, chunking, estruturação pedagógica, RAG, LLM e métricas
+│   │   ├── services/                         # PDF, chunking, embeddings, LLM, mapa (map-reduce), tutor (RAG) e prompts
 │   │   └── use_cases/                        # Regras de negócio da aplicação
 │   ├── scripts/
 │   │   ├── init_db.sql                       # Script de inicialização da extensão vector

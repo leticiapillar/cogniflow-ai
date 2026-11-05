@@ -131,9 +131,9 @@ Aplicado a todo texto gerado (mapa e respostas do tutor):
 - [x] **Falha explícita:** saída inválida → até 2 novas tentativas com o erro de validação no prompt; persistindo a falha ou com o Ollama indisponível, HTTP 503 com a mensagem *"O tutor está indisponível no momento. Tente novamente em instantes."* — nunca uma resposta montada sem o LLM.
 
 ## Etapa 5: Prompts por Perfil de Acessibilidade (`backend/app/services/prompts/`)
-- [ ] Reorganizar `prompts.py` em blocos combináveis: **regras de grounding**, **perfil de acessibilidade** (`neurodivergent`) e **contrato de saída** por tarefa (`map_section`, `reduce_map`, `tutor_answer`, `rewrite_question`).
-- [ ] Remover as regras específicas para surdos (Português L2) e as referências a esse público, mantendo o ponto de extensão `AccessibilityProfile` para o futuro.
-- [ ] Escrever os prompts em **português** e com exemplos curtos de entrada/saída (*few-shot*) — modelos de 3B seguem melhor instruções no idioma do conteúdo e com exemplos concretos.
+- [x] Reorganizar `prompts.py` em blocos combináveis: **regras de grounding**, **perfil de acessibilidade** (`neurodivergent`) e **contrato de saída** por tarefa (`map_section`, `reduce_map`, `tutor_answer`, `rewrite_question`).
+- [x] Remover as regras específicas para surdos (Português L2) e as referências a esse público, mantendo o ponto de extensão `AccessibilityProfile` para o futuro.
+- [x] Escrever os prompts em **português** e com exemplos curtos de entrada/saída (*few-shot*) — modelos de 3B seguem melhor instruções no idioma do conteúdo e com exemplos concretos.
 
 ## Etapa 6: Frontend do Tutor (`frontend/features/`)
 - [ ] **Fluxo:** upload do PDF → indicador de progresso da geração do mapa (polling do `status`/`progress`, com mensagem previsível de etapa) → mapa pronto → tira-dúvidas habilitado.

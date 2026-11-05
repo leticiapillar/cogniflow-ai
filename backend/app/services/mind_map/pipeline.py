@@ -12,7 +12,6 @@ from app.schemas.mind_map import (
 )
 from app.services.embeddings import BaseEmbeddingProvider
 from app.services.llm_provider import BaseLLMProvider
-from app.services.mind_map import prompts
 from app.services.mind_map.llm_schemas import (
     ConceptSelection,
     ExtractedConcept,
@@ -27,6 +26,8 @@ from app.services.mind_map.validation import (
     MAX_TOPICS,
     validate_mind_map_graph,
 )
+from app.services.prompts import map_section, reduce_map
+from app.services.prompts.profiles import DEFAULT_PROFILE, AccessibilityProfile
 from app.services.structured_output import generate_structured
 from app.services.text_processing import clean_concept_label
 
@@ -72,9 +73,15 @@ def _preview(concepts: Sequence[Concept]) -> list[tuple[str, str, str]]:
 class MindMapPipeline:
     """Map (one LLM call per section) and reduce (dedupe + LLM organization) steps."""
 
-    def __init__(self, llm: BaseLLMProvider, embedder: BaseEmbeddingProvider) -> None:
+    def __init__(
+        self,
+        llm: BaseLLMProvider,
+        embedder: BaseEmbeddingProvider,
+        profile: AccessibilityProfile = DEFAULT_PROFILE,
+    ) -> None:
         self._llm = llm
         self._embedder = embedder
+        self._profile = profile
 
     # ---- Map -------------------------------------------------------------------------
 
@@ -118,11 +125,10 @@ class MindMapPipeline:
                 )
             return SectionExtraction(concepts=cleaned), problems
 
-        system_prompt = prompts.EXTRACTION_SYSTEM_PROMPT.format(max_concepts=MAX_CONCEPTS_PER_UNIT)
         result = await generate_structured(
             self._llm,
-            system_prompt,
-            prompts.build_extraction_prompt(unit),
+            map_section.system_prompt(MAX_CONCEPTS_PER_UNIT, self._profile),
+            map_section.user_prompt(unit),
             SectionExtraction,
             validate,
         )
@@ -190,8 +196,8 @@ class MindMapPipeline:
 
         result = await generate_structured(
             self._llm,
-            prompts.SELECTION_SYSTEM_PROMPT,
-            prompts.build_selection_prompt(_preview(group), limit),
+            reduce_map.selection_system_prompt(),
+            reduce_map.selection_user_prompt(_preview(group), limit),
             ConceptSelection,
             validate,
         )
@@ -252,15 +258,12 @@ class MindMapPipeline:
                 )
             return output.model_copy(update={"axes": axes}), problems
 
-        system_prompt = prompts.ORGANIZATION_SYSTEM_PROMPT.format(
-            min_axes=min_axes,
-            max_axes=MAX_TOPICS,
-            max_concepts_per_axis=MAX_CONCEPTS_PER_TOPIC,
-        )
         return await generate_structured(
             self._llm,
-            system_prompt,
-            prompts.build_organization_prompt(_preview(concepts)),
+            reduce_map.organization_system_prompt(
+                min_axes, MAX_TOPICS, MAX_CONCEPTS_PER_TOPIC, self._profile
+            ),
+            reduce_map.organization_user_prompt(_preview(concepts)),
             MapOrganization,
             validate,
         )
