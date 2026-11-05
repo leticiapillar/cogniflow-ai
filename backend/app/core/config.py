@@ -2,11 +2,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, List, Optional
 
-from pydantic import Field
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 ENV_FILE_PATH = BACKEND_DIR / ".env"
+
+SUPPORTED_PROVIDERS = frozenset({"ollama"})
 
 SENSITIVE_FIELD_NAMES = frozenset(
     {
@@ -45,14 +47,17 @@ class Settings(BaseSettings):
         default=20 * 1024 * 1024, alias="MAX_PDF_SIZE_BYTES"
     )
 
-    embedding_provider: str = Field(default="local", alias="EMBEDDING_PROVIDER")
-    llm_provider: str = Field(default="local", alias="LLM_PROVIDER")
+    embedding_provider: str = Field(default="ollama", alias="EMBEDDING_PROVIDER")
+    llm_provider: str = Field(default="ollama", alias="LLM_PROVIDER")
     llm_temperature: float = Field(default=0.1, alias="LLM_TEMPERATURE")
+    embedding_dimension: int = Field(default=1024, gt=0, alias="EMBEDDING_DIMENSION")
 
+    # Gemini is not supported in this version; settings are kept so the provider
+    # can be reintroduced later without changing the configuration contract.
     gemini_api_key: Optional[str] = Field(
         default=None, alias="GEMINI_API_KEY", repr=False
     )
-    gemini_model: str = Field(default="gemini-3.8-flash", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-flash-latest", alias="GEMINI_MODEL")
     gemini_embedding_model: str = Field(
         default="gemini-embedding-001", alias="GEMINI_EMBEDDING_MODEL"
     )
@@ -61,9 +66,22 @@ class Settings(BaseSettings):
         default="http://localhost:11434", alias="OLLAMA_BASE_URL"
     )
     ollama_embedding_model: str = Field(
-        default="nomic-embed-text", alias="OLLAMA_EMBEDDING_MODEL"
+        default="bge-m3", alias="OLLAMA_EMBEDDING_MODEL"
     )
-    ollama_llm_model: str = Field(default="llama3.2", alias="OLLAMA_LLM_MODEL")
+    ollama_llm_model: str = Field(default="llama3.2:3b", alias="OLLAMA_LLM_MODEL")
+    ollama_num_ctx: int = Field(default=8192, gt=0, alias="OLLAMA_NUM_CTX")
+
+    @field_validator("embedding_provider", "llm_provider", mode="before")
+    @classmethod
+    def validate_supported_provider(cls, value: object, info: ValidationInfo) -> str:
+        """Accept only providers supported in this version; fail fast on anything else."""
+        normalized = str(value).strip().lower()
+        if normalized not in SUPPORTED_PROVIDERS:
+            supported = ", ".join(sorted(SUPPORTED_PROVIDERS))
+            raise ValueError(
+                f"Unsupported {info.field_name} '{value}'. Supported providers: {supported}."
+            )
+        return normalized
 
     model_config = SettingsConfigDict(
         env_file=(ENV_FILE_PATH, ".env"),

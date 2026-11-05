@@ -19,7 +19,7 @@ O **CogniFlow AI** é uma plataforma educacional assistiva que utiliza **RAG (Re
   - **TEA**: Linguagem 100% literal e objetiva, sem metáforas ou ambiguidades.
   - **TDAH**: Expansão de siglas na primeira menção, diferenciação visual semântica por cores/categorias e prévia do resumo diretamente nos cartões do grafo para reduzir a atenção dividida (*split-attention effect*).
 - **Alternância Visual / Textual sem Perda de Estado**: Transição imediata entre o **Mapa** interativo (React Flow + layout automático Dagre) e a visualização em **Lista** estruturada (acessível para leitores de tela e navegação integral por teclado), preservando posições, zoom e nó selecionado.
-- **Arquitetura Multi-Provedor de IA**: Suporte intercambiável via configuração (`.env`) para execução determinística **Local** (sem chave externa), **Ollama** (modelos locais abertos com privacidade LGPD) ou **Google Gemini** (`responseSchema` estruturado).
+- **IA 100% Local com Ollama**: LLM `llama3.2:3b` e embeddings `bge-m3` executados na própria máquina (privacidade LGPD), com verificação de prontidão em `GET /api/health`. As interfaces de provedor permitem reintroduzir outros serviços, como o Google Gemini, no futuro.
 
 ---
 
@@ -81,12 +81,13 @@ docker compose up -d
 Esse comando provisiona:
 - **`cogniflow_pgvector`** (`pgvector/pgvector:pg16` na porta `5432`): banco de dados PostgreSQL 16 com a extensão `vector` inicializada automaticamente.
 - **`cogniflow_ollama`** (`ollama/ollama:latest` na porta `11434`): servidor local para execução de LLMs e embeddings abertos.
-- **`cogniflow_ollama_init`**: container auxiliar que baixa automaticamente os modelos padrão (`nomic-embed-text` e `llama3.2:1b`) assim que o serviço `ollama` fica saudável.
+- **`cogniflow_ollama_init`**: container auxiliar que baixa automaticamente os modelos padrão (`bge-m3` para embeddings e `llama3.2:3b` como LLM) assim que o serviço `ollama` fica saudável.
 
-> **Dica:** Caso deseje subir **apenas o banco de dados** (por exemplo, para rodar com os provedores `local` ou `gemini` sem baixar modelos do Ollama), execute:
-> ```bash
-> docker compose up -d postgres
-> ```
+> **Requisitos de hardware:** os modelos `llama3.2:3b` (≈ 2 GB) e `bge-m3` (≈ 1,2 GB) exigem cerca de **4 GB de RAM livres** e ≈ 3,5 GB de disco no volume `ollama_data`. Sem GPU, a geração funciona em CPU, porém mais lenta.
+>
+> **Paralelismo:** a variável `OLLAMA_NUM_PARALLEL` (padrão `1` no `docker-compose.yml`) define quantas requisições cada modelo atende ao mesmo tempo. Com `1`, as chamadas são processadas em série e o uso de memória fica previsível; aumente apenas se houver memória sobrando.
+
+> **Importante:** o backend depende do Ollama para gerar embeddings e respostas. Sem ele, `GET /api/health` responde `"status": "degraded"` com o motivo no campo `issues`.
 
 Para verificar o status dos containers e acompanhar o download inicial dos modelos do Ollama:
 
@@ -108,10 +109,10 @@ cd backend
 cp .env.example .env
 ```
 
-> **Configuração de Provedores de IA (`EMBEDDING_PROVIDER` e `LLM_PROVIDER`):**
-> - **Modo Local Determinístico (Padrão em `.env.example`):** `EMBEDDING_PROVIDER="local"` e `LLM_PROVIDER="local"` permitem rodar toda a aplicação localmente de forma instantânea, sem chave de API externa nem download de modelos pesados.
-> - **Modo Ollama (IA Generativa Local / Privacidade LGPD):** Altere para `EMBEDDING_PROVIDER="ollama"` e `LLM_PROVIDER="ollama"`, mantendo `OLLAMA_BASE_URL="http://localhost:11434"`, `OLLAMA_EMBEDDING_MODEL="nomic-embed-text"` e `OLLAMA_LLM_MODEL="llama3.2:1b"`.
-> - **Modo Google Gemini (Nuvem com Structured Outputs):** Altere para `EMBEDDING_PROVIDER="gemini"` e `LLM_PROVIDER="gemini"`, e preencha `GEMINI_API_KEY="sua_chave"`.
+> **Provedor de IA (`EMBEDDING_PROVIDER` e `LLM_PROVIDER`):** nesta versão, o único provedor suportado é o **Ollama** (`"ollama"`), executado localmente — nenhum dado do material sai da máquina. Qualquer outro valor faz o backend falhar na inicialização.
+> - `OLLAMA_EMBEDDING_MODEL="bge-m3"` e `EMBEDDING_DIMENSION=1024`: embeddings multilíngues com bom desempenho em português.
+> - `OLLAMA_LLM_MODEL="llama3.2:3b"` e `OLLAMA_NUM_CTX=8192`: modelo de 3B parâmetros e tamanho da janela de contexto.
+> - O suporte ao **Google Gemini** foi suspenso nesta versão; o código do provedor foi mantido como ponto de extensão para o futuro.
 
 ### 2.2. Criar Ambiente Virtual e Instalar Dependências
 

@@ -2,21 +2,52 @@ from httpx import AsyncClient
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
+from app.main import app
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.models import EMBEDDING_DIMENSION
+from app.routers.health import get_readiness_checker
+from app.services.ollama_readiness import OllamaReadiness
 
 
 @pytest.mark.asyncio
 async def test_health_endpoint_with_pgvector_container(
     async_client: AsyncClient,
 ) -> None:
-    """Verify GET /api/health reports healthy when connected to pgvector container."""
+    """Verify GET /api/health reports healthy when pgvector and (stubbed) Ollama are ready."""
+
+    async def ready_checker(_: Settings) -> OllamaReadiness:
+        return OllamaReadiness(reachable=True, embedding_dimension=1024)
+
+    app.dependency_overrides[get_readiness_checker] = lambda: ready_checker
     response = await async_client.get("/api/health")
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "healthy"
     assert body["database_connected"] is True
+    assert body["ollama_connected"] is True
+    assert body["issues"] == []
+
+
+@pytest.mark.asyncio
+async def test_health_endpoint_degraded_when_ollama_unavailable(
+    async_client: AsyncClient,
+) -> None:
+    """Verify GET /api/health reports degraded with the reason when Ollama is not ready."""
+
+    async def unavailable_checker(_: Settings) -> OllamaReadiness:
+        return OllamaReadiness(issues=["Ollama server is unreachable at http://x"])
+
+    app.dependency_overrides[get_readiness_checker] = lambda: unavailable_checker
+    response = await async_client.get("/api/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["database_connected"] is True
+    assert body["ollama_connected"] is False
+    assert body["issues"] == ["Ollama server is unreachable at http://x"]
 
 
 @pytest.mark.asyncio

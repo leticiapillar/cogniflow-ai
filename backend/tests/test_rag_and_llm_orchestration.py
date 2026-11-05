@@ -2,11 +2,11 @@ import json
 from pathlib import Path
 
 from httpx import AsyncClient
+from pydantic import ValidationError
 import pytest
 
 from app.core.config import Settings
 from app.repositories.models import DocumentChunkModel, EMBEDDING_DIMENSION
-from app.services.embeddings import EmbeddingService
 from app.services.llm_provider import (
     GEMINI_MIND_MAP_RESPONSE_SCHEMA,
     ContextGroundedLocalLLMProvider,
@@ -25,6 +25,8 @@ from app.services.pedagogical_structurer import (
 )
 from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
 from app.services.rag_retriever import RAGRetriever
+
+from tests.fakes.embeddings import FakeEmbeddingService
 
 SAMPLE_PDF_PATH = (
     Path(__file__).resolve().parents[2] / "Proposta_Projeto_CogniFlow_AI.pdf"
@@ -273,21 +275,30 @@ def test_output_validator_connects_orphan_nodes_to_root() -> None:
 
 
 @pytest.mark.asyncio
-async def test_llm_provider_abstraction_factory_and_switching() -> None:
-    """Verify the LLM abstraction factory seamlessly switches between Local, Gemini, and Ollama."""
-    local_provider = get_llm_provider(Settings(LLM_PROVIDER="local"))
-    assert isinstance(local_provider, ContextGroundedLocalLLMProvider)
-
-    gemini_provider = get_llm_provider(
-        Settings(LLM_PROVIDER="gemini", GEMINI_API_KEY="test-key")
-    )
-    assert isinstance(gemini_provider, GeminiLLMProvider)
-
+async def test_llm_provider_factory_supports_only_ollama() -> None:
+    """Verify only Ollama is selectable; Local and Gemini are rejected at configuration time."""
     ollama_provider = get_llm_provider(
-        Settings(LLM_PROVIDER="ollama", OLLAMA_LLM_MODEL="qwen2.5")
+        Settings(LLM_PROVIDER="ollama", OLLAMA_LLM_MODEL="qwen2.5:3b")
     )
     assert isinstance(ollama_provider, OllamaLLMProvider)
 
+    for unsupported in ("local", "gemini", "openai"):
+        with pytest.raises(ValidationError, match="Unsupported llm_provider"):
+            Settings(LLM_PROVIDER=unsupported)
+        with pytest.raises(ValidationError, match="Unsupported embedding_provider"):
+            Settings(EMBEDDING_PROVIDER=unsupported)
+
+    assert Settings(LLM_PROVIDER=" Ollama ").llm_provider == "ollama"
+
+    # Gemini stays available as an extension point, outside the factory.
+    gemini_provider = GeminiLLMProvider(Settings(GEMINI_API_KEY="test-key"))
+    assert gemini_provider._candidate_models()[-1] == "gemini-flash-latest"
+
+
+@pytest.mark.asyncio
+async def test_context_grounded_local_provider_builds_pedagogical_tree() -> None:
+    """Verify the heuristic provider (removed in plan 03, Etapa 3) still compiles a valid tree."""
+    local_provider = ContextGroundedLocalLLMProvider()
     raw_json = await local_provider.generate_mind_map_json(
         system_prompt=MIND_MAP_SYSTEM_PROMPT,
         user_prompt="test",
@@ -343,7 +354,7 @@ async def test_rag_retriever_expands_neighbor_window_and_orders_canonically() ->
 
     retriever = RAGRetriever(
         repository=FakeRepository(),  # type: ignore[arg-type]
-        embedding_service=EmbeddingService(Settings(EMBEDDING_PROVIDER="local")),
+        embedding_service=FakeEmbeddingService(),
     )
     results = await retriever.retrieve_relevant_chunks(
         query="Generative AI Foundations and History",
@@ -395,7 +406,7 @@ async def test_rag_retriever_stratifies_coverage_for_broad_top_k() -> None:
 
     retriever = RAGRetriever(
         repository=BroadFakeRepository(),  # type: ignore[arg-type]
-        embedding_service=EmbeddingService(Settings(EMBEDDING_PROVIDER="local")),
+        embedding_service=FakeEmbeddingService(),
     )
     results = await retriever.retrieve_relevant_chunks(
         query="O que é IAG?",

@@ -110,15 +110,13 @@ class ContextGroundedLocalLLMProvider(BaseLLMProvider):
 
 
 class GeminiLLMProvider(BaseLLMProvider):
-    """Google Gemini API provider configured for strict JSON Mode output."""
+    """Google Gemini API provider configured for strict JSON Mode output.
 
-    FALLBACK_MODELS: tuple[str, ...] = (
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-flash-latest",
-        "gemini-3.8-flash",
-        "gemini-3.7-flash",
-    )
+    Not supported in this version: kept as an extension point and not selectable by the factory.
+    """
+
+    # Only Google's maintained alias; pinned model versions are configured via GEMINI_MODEL.
+    FALLBACK_MODELS: tuple[str, ...] = ("gemini-flash-latest",)
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
@@ -223,7 +221,7 @@ class OllamaLLMProvider(BaseLLMProvider):
             "stream": False,
             "options": {
                 "temperature": self._settings.llm_temperature,
-                "num_ctx": 8192,
+                "num_ctx": self._settings.ollama_num_ctx,
                 "num_predict": 2500,
             },
         }
@@ -250,13 +248,11 @@ class OllamaLLMProvider(BaseLLMProvider):
 
 
 def get_llm_provider(settings: Settings | None = None) -> BaseLLMProvider:
-    """Factory returning the configured LLM provider instance (Gemini, Ollama, or Local)."""
+    """Factory returning the configured LLM provider instance (Ollama only in this version)."""
     active_settings = settings or get_settings()
     provider_name = active_settings.llm_provider.strip().lower()
 
-    if provider_name == "gemini":
-        return GeminiLLMProvider(settings=active_settings)
     if provider_name == "ollama":
         return OllamaLLMProvider(settings=active_settings)
-    return ContextGroundedLocalLLMProvider()
+    raise ValueError(f"Unsupported LLM provider '{active_settings.llm_provider}'.")
 

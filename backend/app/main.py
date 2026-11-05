@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.database import initialize_database
 from app.core.logging import configure_logging
 from app.routers import document_router, health_router, mind_map_router
+from app.services.ollama_readiness import check_ollama_readiness
 
 
 @asynccontextmanager
@@ -20,6 +21,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await initialize_database()
     except Exception as exc:
         logger.warning("Database auto-initialization skipped on startup: %s", exc)
+
+    # Startup is not blocked: Ollama may still be pulling models (ollama_init).
+    # GET /api/health keeps reporting 'degraded' until it is ready.
+    readiness = await check_ollama_readiness(get_settings())
+    if readiness.ready:
+        logger.info(
+            "Ollama is ready (embedding dimension=%s).", readiness.embedding_dimension
+        )
+    else:
+        for issue in readiness.issues:
+            logger.warning("Ollama not ready: %s", issue)
     yield
     logger.info("Shutting down %s...", app.title)
 
