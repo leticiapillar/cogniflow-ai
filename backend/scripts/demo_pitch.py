@@ -19,9 +19,9 @@ from app.services.evaluation_metrics import (
 from app.services.ingestion_pipeline import IngestionOrchestrator
 from app.services.llm_provider import BaseLLMProvider, LLMProviderError, get_llm_provider
 from app.services.mind_map.pipeline import MindMapPipeline
-from app.services.mind_map.structured import StructuredOutputError
 from app.services.mind_map.units import build_map_units
 from app.services.pdf_parser import extract_text_from_pdf_bytes
+from app.services.structured_output import StructuredOutputError
 
 
 @dataclass(frozen=True)

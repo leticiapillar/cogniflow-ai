@@ -71,6 +71,14 @@ class Settings(BaseSettings):
     ollama_llm_model: str = Field(default="llama3.2:3b", alias="OLLAMA_LLM_MODEL")
     ollama_num_ctx: int = Field(default=8192, gt=0, alias="OLLAMA_NUM_CTX")
     ollama_num_predict: int = Field(default=2048, gt=0, alias="OLLAMA_NUM_PREDICT")
+
+    tutor_top_k: int = Field(default=5, ge=1, le=20, alias="TUTOR_TOP_K")
+    # Below this cosine similarity the best chunk is considered unrelated to the question
+    # and the tutor answers "not found" without calling the LLM. Initial value for bge-m3,
+    # to be calibrated with the evaluation suite (plan 03, Etapa 7).
+    tutor_min_similarity: float = Field(
+        default=0.45, ge=-1.0, le=1.0, alias="TUTOR_MIN_SIMILARITY"
+    )
     # A 3B model on CPU can take minutes per answer; this bounds a single request.
     ollama_llm_timeout_seconds: float = Field(
         default=300.0, gt=0, alias="OLLAMA_LLM_TIMEOUT_SECONDS"

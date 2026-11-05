@@ -20,7 +20,6 @@ from app.services.mind_map.llm_schemas import (
     MapOrganization,
     SectionExtraction,
 )
-from app.services.mind_map.structured import generate_structured
 from app.services.mind_map.units import MapUnit
 from app.services.mind_map.validation import (
     MAX_CONCEPTS_PER_TOPIC,
@@ -28,6 +27,7 @@ from app.services.mind_map.validation import (
     MAX_TOPICS,
     validate_mind_map_graph,
 )
+from app.services.structured_output import generate_structured
 from app.services.text_processing import clean_concept_label
 
 logger = logging.getLogger("cogniflow.services.mind_map.pipeline")

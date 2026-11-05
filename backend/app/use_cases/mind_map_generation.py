@@ -18,8 +18,8 @@ from app.services.embeddings import BaseEmbeddingProvider, EmbeddingProviderErro
 from app.services.llm_provider import BaseLLMProvider, LLMProviderError
 from app.services.mind_map.llm_schemas import ExtractedConcept
 from app.services.mind_map.pipeline import MindMapGenerationError, MindMapPipeline
-from app.services.mind_map.structured import StructuredOutputError
 from app.services.mind_map.units import MapUnit, build_map_units
+from app.services.structured_output import StructuredOutputError
 from app.use_cases.errors import (
     DocumentNotFoundError,
     GenerationInProgressError,

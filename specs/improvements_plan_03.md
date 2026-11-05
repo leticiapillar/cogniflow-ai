@@ -116,19 +116,19 @@ Aplicado a todo texto gerado (mapa e respostas do tutor):
 - [x] Remover `query`/`top_k` da geração do mapa e aposentar o `POST /api/generate-map` (manter por uma versão retornando HTTP 410 com orientação).
 
 ## Etapa 4: Tutor Tira-Dúvidas por RAG (`backend/app/services/tutor/`, `backend/app/routers/tutor.py`)
-- [ ] **API:** `POST /api/documents/{id}/ask` com `question`, `history` opcional (últimas 4 trocas) e `node_id` opcional (dúvida a partir de um conceito do mapa).
-- [ ] **Recuperação:** busca vetorial `top_k=5` com expansão de vizinhos (`± 1`), restrita ao documento. Quando há `node_id`, priorizar os `source_chunks` do nó. Remover a amostragem estratificada (não se aplica a perguntas pontuais).
-- [ ] **Reescrita da pergunta com histórico:** quando houver `history`, reescrever a pergunta em forma autônoma antes da busca (ex.: "e ela depende de quê?" → "de que a fase clara depende?").
-- [ ] **Limiar de relevância:** se a melhor similaridade ficar abaixo do limiar calibrado, responder sem chamar o LLM: *"Não encontrei isso no material da aula."* e sugerir 2 conceitos do mapa relacionados.
-- [ ] **Formato da resposta (perfil neurodivergente), via structured outputs:**
+- [x] **API:** `POST /api/documents/{id}/ask` com `question`, `history` opcional (últimas 4 trocas) e `node_id` opcional (dúvida a partir de um conceito do mapa).
+- [x] **Recuperação:** busca vetorial `top_k=5` com expansão de vizinhos (`± 1`), restrita ao documento. Quando há `node_id`, priorizar os `source_chunks` do nó. Remover a amostragem estratificada (não se aplica a perguntas pontuais).
+- [x] **Reescrita da pergunta com histórico:** quando houver `history`, reescrever a pergunta em forma autônoma antes da busca (ex.: "e ela depende de quê?" → "de que a fase clara depende?").
+- [x] **Limiar de relevância:** se a melhor similaridade ficar abaixo do limiar calibrado, responder sem chamar o LLM: *"Não encontrei isso no material da aula."* e sugerir 2 conceitos do mapa relacionados.
+- [x] **Formato da resposta (perfil neurodivergente), via structured outputs:**
   - `answer`: resposta direta em 1 a 2 frases;
   - `key_points`: até 3 tópicos curtos;
   - `example`: um exemplo do material (opcional);
   - `terms`: termos técnicos usados, com definição;
   - `citations`: `chunk_index`, `page`, `section_title` e trecho curto;
   - `found_in_material`: booleano.
-- [ ] **Segurança:** sanitizar a pergunta (reaproveitar `sanitize_text_input`), delimitar os trechos recuperados como dados no prompt e validar que toda citação referencia um trecho efetivamente recuperado.
-- [ ] **Falha explícita:** saída inválida → até 2 novas tentativas com o erro de validação no prompt; persistindo a falha ou com o Ollama indisponível, HTTP 503 com a mensagem *"O tutor está indisponível no momento. Tente novamente em instantes."* — nunca uma resposta montada sem o LLM.
+- [x] **Segurança:** sanitizar a pergunta (reaproveitar `sanitize_text_input`), delimitar os trechos recuperados como dados no prompt e validar que toda citação referencia um trecho efetivamente recuperado.
+- [x] **Falha explícita:** saída inválida → até 2 novas tentativas com o erro de validação no prompt; persistindo a falha ou com o Ollama indisponível, HTTP 503 com a mensagem *"O tutor está indisponível no momento. Tente novamente em instantes."* — nunca uma resposta montada sem o LLM.
 
 ## Etapa 5: Prompts por Perfil de Acessibilidade (`backend/app/services/prompts/`)
 - [ ] Reorganizar `prompts.py` em blocos combináveis: **regras de grounding**, **perfil de acessibilidade** (`neurodivergent`) e **contrato de saída** por tarefa (`map_section`, `reduce_map`, `tutor_answer`, `rewrite_question`).

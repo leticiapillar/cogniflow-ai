@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.services.llm_provider import BaseLLMProvider
 
-logger = logging.getLogger("cogniflow.services.mind_map.structured")
+logger = logging.getLogger("cogniflow.services.structured_output")
 
 T = TypeVar("T", bound=BaseModel)
 

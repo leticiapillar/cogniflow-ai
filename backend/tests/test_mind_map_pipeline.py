@@ -14,9 +14,9 @@ from app.services.mind_map.llm_schemas import (
     SectionExtraction,
 )
 from app.services.mind_map.pipeline import MAX_ORGANIZATION_CONCEPTS, Concept, MindMapPipeline
-from app.services.mind_map.structured import StructuredOutputError, inline_json_schema
 from app.services.mind_map.units import MapUnit, build_map_units
 from app.services.mind_map.validation import validate_mind_map_graph
+from app.services.structured_output import StructuredOutputError, inline_json_schema
 from tests.fakes.embeddings import FakeEmbeddingProvider
 from tests.fakes.llm import FakeLLMProvider, ScriptedLLMProvider
 

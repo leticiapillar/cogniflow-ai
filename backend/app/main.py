@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal, initialize_database
 from app.core.logging import configure_logging
 from app.repositories.document_repository import DocumentRepository
-from app.routers import document_router, health_router, mind_map_router
+from app.routers import document_router, health_router, mind_map_router, tutor_router
 from app.services.embeddings import get_embedding_provider
 from app.services.llm_provider import get_llm_provider
 from app.services.ollama_readiness import check_ollama_readiness
@@ -89,6 +89,7 @@ def create_application() -> FastAPI:
     application.include_router(health_router)
     application.include_router(document_router)
     application.include_router(mind_map_router)
+    application.include_router(tutor_router)
 
     return application
 

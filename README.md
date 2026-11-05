@@ -39,7 +39,7 @@ cogniflow-ai/
 │   ├── app/
 │   │   ├── core/                             # Configurações (Pydantic Settings), logs e conexão assíncrona DB
 │   │   ├── repositories/                     # Persistência e busca por similaridade vetorial (pgvector)
-│   │   ├── routers/                          # Endpoints REST (/api/health, /api/documents, /api/documents/{id}/mind-map)
+│   │   ├── routers/                          # Endpoints REST (/api/health, /api/documents, /mind-map, /ask)
 │   │   ├── schemas/                          # Contratos estritos de entrada/saída (Pydantic)
 │   │   ├── services/                         # PDF parser, chunking, estruturação pedagógica, RAG, LLM e métricas
 │   │   └── use_cases/                        # Regras de negócio da aplicação
@@ -242,6 +242,27 @@ curl -X POST http://localhost:8000/api/documents/<document_id>/mind-map/sections
 ```
 
 > O endpoint antigo `POST /api/generate-map` foi aposentado e responde **HTTP 410**.
+
+### 4.5. Tutor Tira-Dúvidas (`POST /api/documents/{document_id}/ask`)
+
+O aluno pergunta e o tutor responde **somente com base no PDF da aula** (RAG), sempre na mesma estrutura: resposta direta → até 3 tópicos → exemplo do material → termos técnicos definidos → trechos citados com página.
+
+```bash
+curl -X POST http://localhost:8000/api/documents/<document_id>/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "E onde ela acontece?",
+    "history": [
+      {"role": "student", "content": "O que é a fase clara?"},
+      {"role": "tutor", "content": "A fase clara é a etapa da fotossíntese que usa a luz."}
+    ]
+  }'
+```
+
+- `history` (opcional, até 4 trocas): o tutor reescreve a pergunta em forma completa antes de buscar no material.
+- `node_id` (opcional): dúvida sobre um conceito do mapa; os trechos de origem do conceito entram sempre no contexto.
+- Se o trecho mais parecido tiver similaridade abaixo de `TUTOR_MIN_SIMILARITY`, ou se o modelo indicar que o material não responde, a resposta é `"found_in_material": false` com a mensagem fixa *"Não encontrei isso no material da aula."* e até 2 conceitos do mapa relacionados — sem chamar o LLM no primeiro caso.
+- Se o Ollama estiver indisponível ou o modelo continuar respondendo fora do formato após 2 correções, a API responde **HTTP 503** (*"O tutor está indisponível no momento. Tente novamente em instantes."*). Nunca é devolvida uma resposta montada sem o LLM.
 
 ---
 

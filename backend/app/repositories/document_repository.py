@@ -154,14 +154,14 @@ class DocumentRepository:
         result = await self._session.execute(statement)
         return result.scalars().all()
 
-    async def search_similar_chunks(
+    async def search_similar_chunks_with_similarity(
         self,
         query_embedding: list[float],
         embedding_model: str,
         top_k: int = 5,
         document_id: uuid.UUID | None = None,
-    ) -> Sequence[DocumentChunkModel]:
-        """Retrieve the top-K most similar chunks by cosine distance.
+    ) -> list[tuple[DocumentChunkModel, float]]:
+        """Top-K chunks by cosine distance, each with its cosine similarity (1 - distance).
 
         Only chunks embedded with `embedding_model` are compared: vectors from other
         models are not comparable with the query vector.
@@ -170,16 +170,31 @@ class DocumentRepository:
         # Iterative scans (pgvector >= 0.8) keep scanning until enough rows match.
         await self._session.execute(text("SET LOCAL hnsw.iterative_scan = strict_order"))
 
+        distance = DocumentChunkModel.embedding.cosine_distance(query_embedding)
         statement = (
-            select(DocumentChunkModel)
+            select(DocumentChunkModel, (1 - distance).label("similarity"))
             .join(DocumentModel, DocumentModel.id == DocumentChunkModel.document_id)
             .where(DocumentModel.embedding_model == embedding_model)
         )
         if document_id is not None:
             statement = statement.where(DocumentChunkModel.document_id == document_id)
-        statement = statement.order_by(
-            DocumentChunkModel.embedding.cosine_distance(query_embedding)
-        ).limit(top_k)
+        statement = statement.order_by(distance).limit(top_k)
 
         result = await self._session.execute(statement)
-        return result.scalars().all()
+        return [(chunk, float(similarity)) for chunk, similarity in result.all()]
+
+    async def search_similar_chunks(
+        self,
+        query_embedding: list[float],
+        embedding_model: str,
+        top_k: int = 5,
+        document_id: uuid.UUID | None = None,
+    ) -> list[DocumentChunkModel]:
+        """Top-K chunks by cosine distance (see search_similar_chunks_with_similarity)."""
+        scored = await self.search_similar_chunks_with_similarity(
+            query_embedding, embedding_model, top_k, document_id
+        )
+        return [chunk for chunk, _ in scored]
+
+    async def get_document(self, document_id: uuid.UUID) -> DocumentModel | None:
+        return await self._session.get(DocumentModel, document_id)

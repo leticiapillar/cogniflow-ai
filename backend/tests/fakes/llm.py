@@ -13,8 +13,15 @@ CONCEPT_LINE = re.compile(r"^- (c\d+) \| ([^|]+) \|", re.MULTILINE)
 SELECTION_LIMIT = re.compile(r"no máximo (\d+) conceitos")
 
 
+CURRENT_QUESTION = re.compile(r"^Pergunta atual: (.+)$", re.MULTILINE)
+
+
 def task_of(json_schema: dict[str, Any]) -> str:
     properties = json_schema.get("properties", {})
+    if "found_in_material" in properties:
+        return "answer"
+    if "question" in properties:
+        return "rewrite"
     if "axes" in properties:
         return "organization"
     if "concept_ids" in properties:
@@ -76,6 +83,22 @@ class FakeLLMProvider(BaseLLMProvider):
             "topic": "Tema da aula",
             "synthesis": "A aula apresenta o tema central. O tema é importante para a disciplina.",
             "axes": axes,
+        }
+
+
+    def _rewrite(self, prompt: str) -> dict[str, Any]:
+        current = CURRENT_QUESTION.search(prompt).group(1)  # type: ignore[union-attr]
+        return {"question": f"Pergunta completa: {current}"}
+
+    def _answer(self, prompt: str) -> dict[str, Any]:
+        cited = [int(index) for index, _ in CHUNK_LINE.findall(prompt)][:1]
+        return {
+            "found_in_material": True,
+            "answer": f"A resposta está no trecho {cited[0]}.",
+            "key_points": ["Primeiro ponto.", "Segundo ponto.", "Terceiro ponto.", "Quarto ponto."],
+            "example": "",
+            "terms": [{"term": "Fotossíntese", "definition": "Processo das plantas."}],
+            "citations": cited,
         }
 
 

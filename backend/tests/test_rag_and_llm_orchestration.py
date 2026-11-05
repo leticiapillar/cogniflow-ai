@@ -49,99 +49,74 @@ def test_text_processing_reflows_pdf_lines_and_drops_metadata() -> None:
     assert clean_concept_label("a capacidade dos seus") == "A capacidade"
 
 
-@pytest.mark.asyncio
-async def test_rag_retriever_expands_neighbor_window_and_orders_canonically() -> None:
-    """Verify RAGRetriever expands adjacent chunks and returns results in ascending chunk_index order."""
-    dummy_vec = [0.1] * EMBEDDING_DIMENSION
-    all_chunks = {
-        idx: DocumentChunkModel(
-            document_id=DOCUMENT_ID,
-            chunk_index=idx,
-            content=f"Section {idx} content",
-            embedding=dummy_vec,
-        )
-        for idx in range(6)
-    }
+class FakeChunkRepository:
+    """In-memory repository: vector search returns a fixed ranking with similarities."""
 
-    class FakeRepository:
-        async def search_similar_chunks(
-            self,
-            query_embedding: list[float],
-            embedding_model: str,
-            top_k: int = 5,
-            document_id: uuid.UUID | None = None,
-        ) -> list[DocumentChunkModel]:
-            # Simulate cosine similarity returning out-of-order chunks (4, then 1)
-            return [all_chunks[4], all_chunks[1]]
+    def __init__(self, count: int, ranking: list[tuple[int, float]]) -> None:
+        self.chunks = {
+            idx: DocumentChunkModel(
+                document_id=DOCUMENT_ID,
+                chunk_index=idx,
+                content=f"Section {idx} content",
+                page_start=1,
+                page_end=1,
+                embedding=[0.1] * EMBEDDING_DIMENSION,
+            )
+            for idx in range(count)
+        }
+        self.ranking = ranking
 
-        async def get_chunks_by_indices(
-            self,
-            document_id: uuid.UUID,
-            chunk_indices: list[int],
-        ) -> list[DocumentChunkModel]:
-            return [all_chunks[i] for i in sorted(chunk_indices) if i in all_chunks]
+    async def search_similar_chunks_with_similarity(
+        self,
+        query_embedding: list[float],
+        embedding_model: str,
+        top_k: int = 5,
+        document_id: uuid.UUID | None = None,
+    ) -> list[tuple[DocumentChunkModel, float]]:
+        assert embedding_model == "fake-hashed-embedding"
+        return [(self.chunks[i], score) for i, score in self.ranking[:top_k]]
 
-    retriever = RAGRetriever(
-        repository=FakeRepository(),  # type: ignore[arg-type]
-        embedding_provider=FakeEmbeddingProvider(),
-    )
-    results = await retriever.retrieve_relevant_chunks(
-        query="Generative AI Foundations and History",
-        top_k=2,
-        document_id=DOCUMENT_ID,
-        neighbor_window=1,
-    )
+    async def get_chunks_by_indices(
+        self, document_id: uuid.UUID, chunk_indices: list[int]
+    ) -> list[DocumentChunkModel]:
+        return [self.chunks[i] for i in sorted(chunk_indices) if i in self.chunks]
 
-    retrieved_indices = [chunk.chunk_index for chunk in results]
-    # Primary (4, 1) + neighbors (0, 2, 3, 5) sorted canonically -> [0, 1, 2, 3, 4, 5]
-    assert retrieved_indices == [0, 1, 2, 3, 4, 5]
+
+def retriever_for(repository: FakeChunkRepository) -> RAGRetriever:
+    return RAGRetriever(repository=repository, embedding_provider=FakeEmbeddingProvider())  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
-async def test_rag_retriever_stratifies_coverage_for_broad_top_k() -> None:
-    """Verify RAGRetriever includes chunks across the document when top_k >= 10."""
-    dummy_vec = [0.1] * EMBEDDING_DIMENSION
-    all_chunks = [
-        DocumentChunkModel(
-            document_id=DOCUMENT_ID,
-            chunk_index=idx,
-            content=f"Section {idx} content",
-            embedding=dummy_vec,
-        )
-        for idx in range(12)
-    ]
-
-    class BroadFakeRepository:
-        async def search_similar_chunks(
-            self,
-            query_embedding: list[float],
-            embedding_model: str,
-            top_k: int = 5,
-            document_id: uuid.UUID | None = None,
-        ) -> list[DocumentChunkModel]:
-            return all_chunks[:2]
-
-        async def get_chunks_by_indices(
-            self,
-            document_id: uuid.UUID,
-            chunk_indices: list[int],
-        ) -> list[DocumentChunkModel]:
-            return [all_chunks[i] for i in sorted(chunk_indices) if 0 <= i < len(all_chunks)]
-
-        async def get_chunks_by_document(
-            self,
-            document_id: uuid.UUID,
-        ) -> list[DocumentChunkModel]:
-            return all_chunks
-
-    retriever = RAGRetriever(
-        repository=BroadFakeRepository(),  # type: ignore[arg-type]
-        embedding_provider=FakeEmbeddingProvider(),
-    )
-    results = await retriever.retrieve_relevant_chunks(
-        query="O que é IAG?",
-        top_k=15,
-        document_id=DOCUMENT_ID,
+async def test_rag_retriever_expands_neighbors_and_orders_canonically() -> None:
+    """Hits (4, then 1) plus their neighbors come back in document order."""
+    result = await retriever_for(FakeChunkRepository(6, [(4, 0.8), (1, 0.6)])).retrieve(
+        "fotossíntese", DOCUMENT_ID, top_k=2
     )
 
-    assert [chunk.chunk_index for chunk in results] == list(range(12))
+    assert [chunk.chunk_index for chunk in result.chunks] == [0, 1, 2, 3, 4, 5]
+    assert result.ranked_indices == [4, 1]
+    assert result.best_similarity == 0.8
+
+
+@pytest.mark.asyncio
+async def test_rag_retriever_includes_pinned_chunks_of_a_map_node() -> None:
+    result = await retriever_for(FakeChunkRepository(20, [(2, 0.7)])).retrieve(
+        "dúvida", DOCUMENT_ID, top_k=1, neighbor_window=0, pinned_indices=[15, 2]
+    )
+    assert [chunk.chunk_index for chunk in result.chunks] == [2, 15]
+
+
+@pytest.mark.asyncio
+async def test_rag_retriever_budget_keeps_neighbors_of_the_best_hits() -> None:
+    """With top_k=1 the budget is 4 chunks: the best hit's neighbors win over the rest."""
+    repository = FakeChunkRepository(30, [(20, 0.9)])
+    result = await retriever_for(repository).retrieve(
+        "dúvida", DOCUMENT_ID, top_k=1, neighbor_window=2
+    )
+    assert [chunk.chunk_index for chunk in result.chunks] == [18, 19, 20, 21]
+
+
+@pytest.mark.asyncio
+async def test_rag_retriever_without_hits() -> None:
+    result = await retriever_for(FakeChunkRepository(3, [])).retrieve("dúvida", DOCUMENT_ID)
+    assert result.chunks == [] and result.best_similarity is None
