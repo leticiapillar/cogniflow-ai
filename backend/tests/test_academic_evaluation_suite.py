@@ -10,8 +10,10 @@ from app.services.evaluation_metrics import (
     calculate_entity_recall,
     evaluate_render_success_rate,
 )
+from app.services.llm_provider import ContextGroundedLocalLLMProvider
 from app.services.security_audit import audit_environment_isolation
 from scripts.demo_pitch import run_live_pitch_demo
+from tests.fakes.embeddings import FakeEmbeddingProvider
 from tests.fixtures.academic_materials import (
     TWENTY_ACADEMIC_MATERIALS,
     AcademicMaterialSample,
@@ -89,7 +91,11 @@ def test_environment_variable_isolation_and_secret_masking() -> None:
 @pytest.mark.asyncio
 async def test_live_pitch_prototype_pdf_conversion() -> None:
     """Verify the live pitch demo script converts Proposta_Projeto_CogniFlow_AI.pdf in under 2 minutes."""
-    mind_map, recall_result, total_latency_ms = await run_live_pitch_demo(SAMPLE_PDF_PATH)
+    mind_map, recall_result, total_latency_ms = await run_live_pitch_demo(
+        SAMPLE_PDF_PATH,
+        embedding_provider=FakeEmbeddingProvider(),
+        llm_provider=ContextGroundedLocalLLMProvider(),
+    )
 
     assert len(mind_map.nodes) >= 2
     assert len(mind_map.edges) >= 1

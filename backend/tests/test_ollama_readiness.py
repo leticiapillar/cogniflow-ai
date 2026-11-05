@@ -108,6 +108,9 @@ class StubRepository:
     async def check_connection(self) -> bool:
         return self._connected
 
+    async def check_schema(self, expected_dimension: int) -> list[str]:
+        return []
+
 
 @pytest.mark.parametrize(
     ("db_connected", "readiness", "expected_status", "expected_issues"),

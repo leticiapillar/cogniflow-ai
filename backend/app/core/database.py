@@ -39,6 +39,8 @@ async def initialize_database(target_engine: AsyncEngine | None = None) -> None:
     active_engine = target_engine or engine
     async with active_engine.begin() as connection:
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # Iterative HNSW scans (used by filtered similarity search) need pgvector >= 0.8.
+        await connection.execute(text("ALTER EXTENSION vector UPDATE"))
         await connection.run_sync(Base.metadata.create_all)
     logger.info("Database initialized with pgvector extension enabled.")
 

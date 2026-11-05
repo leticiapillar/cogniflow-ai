@@ -98,6 +98,20 @@ docker compose logs -f ollama_init
 
 ---
 
+### 1.1. Atualizando um Banco Criado por uma Versão Anterior
+
+A partir do `improvements_plan_03`, os embeddings passaram a ser gerados pelo `bge-m3` (**1024 dimensões**) e cada trecho guarda a seção e as páginas de origem. Vetores do modelo anterior não são comparáveis com os do `bge-m3`, por isso os dados antigos não podem ser convertidos: a tabela é recriada e os PDFs precisam ser **enviados novamente**.
+
+```bash
+docker compose exec -T postgres psql -U cogniflow -d cogniflow_db < backend/scripts/migrate_03.sql
+```
+
+Em seguida, reinicie o backend: as tabelas `documents` e `document_chunks` e o índice HNSW são criados na inicialização. Enquanto a migração não for executada, o backend registra o problema no log e `GET /api/health` responde `"status": "degraded"` indicando o script a rodar.
+
+> **Requisito:** pgvector **0.8 ou superior** (a imagem `pgvector/pgvector:pg16` já atende), necessário para as buscas iterativas no índice HNSW quando a consulta filtra por documento.
+
+---
+
 ## 2. Configurando e Rodando o Backend (FastAPI)
 
 ### 2.1. Configurar Variáveis de Ambiente
@@ -197,11 +211,15 @@ curl -X POST http://localhost:8000/api/documents/ingest \
   -F "file=@Proposta_Projeto_CogniFlow_AI.pdf;type=application/pdf"
 ```
 
+A resposta inclui `document_id`, `page_count` e `total_chunks`. Se o Ollama estiver indisponível, a ingestão responde **HTTP 503** e nada é gravado — uma versão anterior do mesmo PDF permanece intacta.
+
 ### 4.3. Consulta de Chunks Armazenados de um Documento (`GET /api/documents/{document_name}/chunks`)
 
 ```bash
 curl -X GET http://localhost:8000/api/documents/Proposta_Projeto_CogniFlow_AI.pdf/chunks
 ```
+
+Cada trecho traz `section_title`, `page_start` e `page_end`, usados para citar a página de origem.
 
 ### 4.4. Geração de Mapa Mental via RAG (`POST /api/generate-map`)
 

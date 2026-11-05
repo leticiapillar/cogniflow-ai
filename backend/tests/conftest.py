@@ -13,6 +13,9 @@ from testcontainers.community.postgres import PostgresContainer
 
 from app.core.database import get_db_session, initialize_database
 from app.main import app
+from app.routers.dependencies import provide_embedding_provider, provide_llm_provider
+from app.services.llm_provider import ContextGroundedLocalLLMProvider
+from tests.fakes.embeddings import FakeEmbeddingProvider
 
 
 @pytest.fixture(scope="session")
@@ -62,6 +65,10 @@ async def async_client(
         yield db_session
 
     app.dependency_overrides[get_db_session] = override_get_db_session
+    # Never reach a real Ollama server from API tests.
+    app.dependency_overrides[provide_embedding_provider] = FakeEmbeddingProvider
+    # Temporary: the heuristic provider is removed in plan 03, Etapa 3 (FakeLLMProvider).
+    app.dependency_overrides[provide_llm_provider] = ContextGroundedLocalLLMProvider
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client

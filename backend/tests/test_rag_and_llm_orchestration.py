@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import uuid
 
 from httpx import AsyncClient
 from pydantic import ValidationError
@@ -26,7 +27,9 @@ from app.services.pedagogical_structurer import (
 from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
 from app.services.rag_retriever import RAGRetriever
 
-from tests.fakes.embeddings import FakeEmbeddingService
+from tests.fakes.embeddings import FakeEmbeddingProvider
+
+DOCUMENT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 SAMPLE_PDF_PATH = (
     Path(__file__).resolve().parents[2] / "Proposta_Projeto_CogniFlow_AI.pdf"
@@ -327,7 +330,7 @@ async def test_rag_retriever_expands_neighbor_window_and_orders_canonically() ->
     dummy_vec = [0.1] * EMBEDDING_DIMENSION
     all_chunks = {
         idx: DocumentChunkModel(
-            document_name="genai_lecture.pdf",
+            document_id=DOCUMENT_ID,
             chunk_index=idx,
             content=f"Section {idx} content",
             embedding=dummy_vec,
@@ -339,27 +342,28 @@ async def test_rag_retriever_expands_neighbor_window_and_orders_canonically() ->
         async def search_similar_chunks(
             self,
             query_embedding: list[float],
+            embedding_model: str,
             top_k: int = 5,
-            document_name: str | None = None,
+            document_id: uuid.UUID | None = None,
         ) -> list[DocumentChunkModel]:
             # Simulate cosine similarity returning out-of-order chunks (4, then 1)
             return [all_chunks[4], all_chunks[1]]
 
         async def get_chunks_by_indices(
             self,
-            document_name: str,
+            document_id: uuid.UUID,
             chunk_indices: list[int],
         ) -> list[DocumentChunkModel]:
             return [all_chunks[i] for i in sorted(chunk_indices) if i in all_chunks]
 
     retriever = RAGRetriever(
         repository=FakeRepository(),  # type: ignore[arg-type]
-        embedding_service=FakeEmbeddingService(),
+        embedding_provider=FakeEmbeddingProvider(),
     )
     results = await retriever.retrieve_relevant_chunks(
         query="Generative AI Foundations and History",
         top_k=2,
-        document_name="genai_lecture.pdf",
+        document_id=DOCUMENT_ID,
         neighbor_window=1,
     )
 
@@ -374,7 +378,7 @@ async def test_rag_retriever_stratifies_coverage_for_broad_top_k() -> None:
     dummy_vec = [0.1] * EMBEDDING_DIMENSION
     all_chunks = [
         DocumentChunkModel(
-            document_name="genai_lecture.pdf",
+            document_id=DOCUMENT_ID,
             chunk_index=idx,
             content=f"Section {idx} content",
             embedding=dummy_vec,
@@ -386,32 +390,33 @@ async def test_rag_retriever_stratifies_coverage_for_broad_top_k() -> None:
         async def search_similar_chunks(
             self,
             query_embedding: list[float],
+            embedding_model: str,
             top_k: int = 5,
-            document_name: str | None = None,
+            document_id: uuid.UUID | None = None,
         ) -> list[DocumentChunkModel]:
             return all_chunks[:2]
 
         async def get_chunks_by_indices(
             self,
-            document_name: str,
+            document_id: uuid.UUID,
             chunk_indices: list[int],
         ) -> list[DocumentChunkModel]:
             return [all_chunks[i] for i in sorted(chunk_indices) if 0 <= i < len(all_chunks)]
 
         async def get_chunks_by_document(
             self,
-            document_name: str,
+            document_id: uuid.UUID,
         ) -> list[DocumentChunkModel]:
             return all_chunks
 
     retriever = RAGRetriever(
         repository=BroadFakeRepository(),  # type: ignore[arg-type]
-        embedding_service=FakeEmbeddingService(),
+        embedding_provider=FakeEmbeddingProvider(),
     )
     results = await retriever.retrieve_relevant_chunks(
         query="O que é IAG?",
         top_k=15,
-        document_name="genai_lecture.pdf",
+        document_id=DOCUMENT_ID,
     )
 
     assert [chunk.chunk_index for chunk in results] == list(range(12))

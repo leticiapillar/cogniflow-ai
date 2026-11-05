@@ -6,8 +6,9 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.database import initialize_database
+from app.core.database import AsyncSessionLocal, initialize_database
 from app.core.logging import configure_logging
+from app.repositories.document_repository import DocumentRepository
 from app.routers import document_router, health_router, mind_map_router
 from app.services.ollama_readiness import check_ollama_readiness
 
@@ -19,6 +20,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Starting up %s...", app.title)
     try:
         await initialize_database()
+        async with AsyncSessionLocal() as session:
+            schema_issues = await DocumentRepository(session).check_schema(
+                get_settings().embedding_dimension
+            )
+        for issue in schema_issues:
+            logger.error("Database schema problem: %s", issue)
     except Exception as exc:
         logger.warning("Database auto-initialization skipped on startup: %s", exc)
 

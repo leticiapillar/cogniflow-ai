@@ -1,4 +1,5 @@
 from pathlib import Path
+import uuid
 
 from httpx import AsyncClient
 import pytest
@@ -6,13 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.document_repository import DocumentRepository
 from app.services.chunking import chunk_text_semantically, split_text_by_headers
-from app.services.embeddings import EmbeddingService
 from app.services.pdf_parser import PDFParsingError, extract_text_from_pdf_bytes
 from app.services.sanitizer import (
     PromptInjectionError,
     detect_prompt_injection,
     sanitize_text_input,
 )
+from tests.fakes.embeddings import FakeEmbeddingProvider
 
 SAMPLE_PDF_PATH = (
     Path(__file__).resolve().parents[2] / "Proposta_Projeto_CogniFlow_AI.pdf"
@@ -105,13 +106,22 @@ async def test_ingest_pdf_endpoint_and_pgvector_persistence(
     chunks_list = chunks_response.json()
     assert len(chunks_list) == payload["total_chunks"]
 
-    embedding_service = EmbeddingService()
-    query_vector = embedding_service.embed_query("PostgreSQL pgvector Docker Compose")
+    assert all(chunk["page_start"] >= 1 for chunk in chunks_list)
+    assert all(chunk["page_end"] <= payload["page_count"] for chunk in chunks_list)
+
+    embedding_provider = FakeEmbeddingProvider()
+    query_vector = await embedding_provider.embed_query("PostgreSQL pgvector Docker Compose")
     repository = DocumentRepository(session=db_session)
+    document = await repository.get_document_by_name("Proposta_Projeto_CogniFlow_AI.pdf")
+    assert document is not None
+    assert document.id == uuid.UUID(payload["document_id"])
+    assert document.embedding_model == embedding_provider.model_name
+    assert len(document.sha256) == 64
     similar_chunks = await repository.search_similar_chunks(
         query_embedding=query_vector,
+        embedding_model=embedding_provider.model_name,
         top_k=2,
-        document_name="Proposta_Projeto_CogniFlow_AI.pdf",
+        document_id=document.id,
     )
     assert len(similar_chunks) >= 1
 

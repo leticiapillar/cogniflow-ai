@@ -1,79 +1,91 @@
 import logging
-from typing import Any
 
 from langchain_core.runnables import RunnableLambda, RunnableSequence
 
 from app.core.config import Settings, get_settings
-from app.schemas.document import IngestedChunkPayload
-from app.services.chunking import chunk_text_semantically
-from app.services.embeddings import EmbeddingService
-from app.services.pdf_parser import extract_text_from_pdf_bytes
-from app.services.sanitizer import sanitize_text_input
+from app.schemas.document import IngestedChunkPayload, IngestionResult
+from app.services.chunking import TextChunk, chunk_pages
+from app.services.embeddings import BaseEmbeddingProvider, get_embedding_provider
+from app.services.pdf_parser import ParsedPdf, PdfPage, parse_pdf
+from app.services.sanitizer import InputValidationError, sanitize_text_input
 
 logger = logging.getLogger("cogniflow.services.ingestion_pipeline")
 
 
 class IngestionOrchestrator:
-    """LangChain Runnable pipeline orchestrating PDF extraction, sanitization, chunking, and embedding."""
+    """LangChain Runnable pipeline: PDF extraction, sanitization, chunking, and embedding.
+
+    The pipeline only computes; it never writes to the database. Persisting happens after
+    every vector has been produced, so a provider failure never leaves a partial document.
+    """
 
     def __init__(
         self,
-        embedding_service: EmbeddingService | None = None,
+        embedding_provider: BaseEmbeddingProvider | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._settings = settings or get_settings()
-        self._embedding_service = embedding_service or EmbeddingService(
-            settings=self._settings
+        self._embedding_provider = embedding_provider or get_embedding_provider(
+            self._settings
         )
-        self._pipeline: RunnableSequence[dict[str, Any], list[IngestedChunkPayload]] = (
+        self._pipeline: RunnableSequence[bytes, IngestionResult] = (
             RunnableLambda(self._extract_step)
             | RunnableLambda(self._sanitize_step)
             | RunnableLambda(self._chunk_step)
             | RunnableLambda(self._embed_step)
         )
 
-    def _extract_step(self, payload: dict[str, Any]) -> str:
-        """Step 1: Extract raw text from PDF bytes or direct text input."""
-        if "file_bytes" in payload and payload["file_bytes"] is not None:
-            return extract_text_from_pdf_bytes(payload["file_bytes"])
-        if "raw_text" in payload and payload["raw_text"] is not None:
-            return str(payload["raw_text"])
-        raise ValueError("Ingestion payload must provide 'file_bytes' or 'raw_text'.")
+    def _extract_step(self, file_bytes: bytes) -> ParsedPdf:
+        """Step 1: Extract the text of each PDF page."""
+        return parse_pdf(file_bytes)
 
-    def _sanitize_step(self, raw_text: str) -> str:
-        """Step 2: Sanitize extracted text and guard against prompt injection."""
-        return sanitize_text_input(raw_text, reject_on_injection=True)
+    def _sanitize_step(self, parsed: ParsedPdf) -> ParsedPdf:
+        """Step 2: Sanitize each page and guard against prompt injection."""
+        pages = [
+            PdfPage(number=page.number, text=cleaned)
+            for page in parsed.pages
+            if (cleaned := sanitize_text_input(page.text, reject_on_injection=True))
+        ]
+        if not pages:
+            raise InputValidationError("The PDF has no usable text after sanitization.")
+        return ParsedPdf(pages=pages, page_count=parsed.page_count)
 
-    def _chunk_step(self, clean_text: str) -> list[str]:
-        """Step 3: Perform semantic chunking by headers and recursive overlap."""
-        return chunk_text_semantically(
-            text=clean_text,
+    def _chunk_step(self, parsed: ParsedPdf) -> tuple[int, list[TextChunk]]:
+        """Step 3: Chunk by section headings and size, keeping section and page ranges."""
+        chunks = chunk_pages(
+            parsed.pages,
             chunk_size=self._settings.chunk_size,
             chunk_overlap=self._settings.chunk_overlap,
         )
+        return parsed.page_count, chunks
 
-    def _embed_step(self, chunks: list[str]) -> list[IngestedChunkPayload]:
-        """Step 4: Generate vector embeddings for all semantic chunks."""
-        vectors = self._embedding_service.embed_documents(chunks)
-        return [
-            IngestedChunkPayload(
-                chunk_index=idx,
-                content=chunk_content,
-                embedding=vector,
-            )
-            for idx, (chunk_content, vector) in enumerate(
-                zip(chunks, vectors, strict=True)
-            )
-        ]
+    async def _embed_step(self, chunked: tuple[int, list[TextChunk]]) -> IngestionResult:
+        """Step 4: Embed every chunk (fails as a whole if the provider fails)."""
+        page_count, chunks = chunked
+        vectors = await self._embedding_provider.embed_documents(
+            [chunk.content for chunk in chunks]
+        )
+        return IngestionResult(
+            page_count=page_count,
+            chunks=[
+                IngestedChunkPayload(
+                    chunk_index=idx,
+                    content=chunk.content,
+                    section_title=chunk.section_title,
+                    page_start=chunk.page_start,
+                    page_end=chunk.page_end,
+                    embedding=vector,
+                )
+                for idx, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))
+            ],
+        )
 
-    async def process_pdf_bytes(self, file_bytes: bytes) -> list[IngestedChunkPayload]:
-        """Execute the LangChain ingestion pipeline on a PDF byte stream."""
-        result = await self._pipeline.ainvoke({"file_bytes": file_bytes})
-        logger.info("Orchestrator produced %d embedded chunks.", len(result))
-        return result
-
-    async def process_raw_text(self, raw_text: str) -> list[IngestedChunkPayload]:
-        """Execute the LangChain ingestion pipeline on raw text."""
-        result = await self._pipeline.ainvoke({"raw_text": raw_text})
-        logger.info("Orchestrator produced %d embedded chunks from text.", len(result))
+    async def process_pdf_bytes(self, file_bytes: bytes) -> IngestionResult:
+        """Execute the ingestion pipeline on a PDF byte stream."""
+        result = await self._pipeline.ainvoke(file_bytes)
+        logger.info(
+            "Orchestrator produced %d embedded chunks from %d pages.",
+            len(result.chunks),
+            result.page_count,
+        )
         return result

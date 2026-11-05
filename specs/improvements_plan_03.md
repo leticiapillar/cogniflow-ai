@@ -87,17 +87,17 @@ Aplicado a todo texto gerado (mapa e respostas do tutor):
 - [x] Documentar o requisito de hardware (≈ 4 GB de RAM livres para `llama3.2:3b` + `bge-m3`) e a variável `OLLAMA_NUM_PARALLEL` (o Ollama processa requisições em série por padrão).
 
 ## Etapa 2: Embeddings `bge-m3` e Novo Modelo de Dados (`backend/app/services/embeddings.py`, `backend/app/repositories/`)
-- [ ] Extrair a interface `BaseEmbeddingProvider` com a implementação `OllamaEmbeddingProvider`, mantendo um ponto de extensão para Gemini.
-- [ ] **Remover `_compute_deterministic_embedding` e o fallback silencioso** de `embeddings.py`: misturar vetores de espaços diferentes na mesma tabela corrompe a busca. O `FakeEmbeddingProvider` para testes passa a viver em `backend/tests/fakes/`, injetado por fixture — a aplicação não consegue selecioná-lo.
-- [ ] Usar o endpoint `/api/embed` do Ollama com **lote** (`input: [..]`) e `httpx.AsyncClient` — elimina o bloqueio do event loop causado pelo `httpx.Client` síncrono atual.
-- [ ] **Repetição com *backoff*** (até 3 tentativas) apenas para erros transitórios — timeout, conexão recusada, HTTP 5xx. Esgotadas as tentativas, lançar `EmbeddingProviderError`, convertido em HTTP 503 com mensagem compreensível.
-- [ ] Validar a dimensão de todo vetor retornado (`== EMBEDDING_DIMENSION`) antes de persistir.
-- [ ] **Ingestão tudo-ou-nada:** gerar todos os vetores antes de abrir a transação de escrita, de modo que uma falha não deixe o documento parcialmente vetorizado.
-- [ ] Criar a tabela `documents` (`id`, `name`, `sha256`, `page_count`, `embedding_model`, `created_at`) e vincular `document_chunks` por `document_id`.
-- [ ] Migrar `document_chunks.embedding` para `Vector(1024)` e adicionar as colunas `section_title`, `page_start` e `page_end` (para citar "página N" nas respostas). Como `create_all` não altera tabelas existentes, criar o script `backend/scripts/migrate_03.sql` (drop + recriação) e documentar a necessidade de reingerir os PDFs.
-- [ ] Criar índice **HNSW** (`vector_cosine_ops`) em `document_chunks.embedding`.
-- [ ] Preservar o mapeamento página → texto no `pdf_parser.py` e propagá-lo pelo chunking.
-- [ ] Recusar consultas a documentos ingeridos com um `embedding_model` diferente do configurado (orientar reingestão).
+- [x] Extrair a interface `BaseEmbeddingProvider` com a implementação `OllamaEmbeddingProvider`, mantendo um ponto de extensão para Gemini.
+- [x] **Remover `_compute_deterministic_embedding` e o fallback silencioso** de `embeddings.py`: misturar vetores de espaços diferentes na mesma tabela corrompe a busca. O `FakeEmbeddingProvider` para testes passa a viver em `backend/tests/fakes/`, injetado por fixture — a aplicação não consegue selecioná-lo.
+- [x] Usar o endpoint `/api/embed` do Ollama com **lote** (`input: [..]`) e `httpx.AsyncClient` — elimina o bloqueio do event loop causado pelo `httpx.Client` síncrono atual.
+- [x] **Repetição com *backoff*** (até 3 tentativas) apenas para erros transitórios — timeout, conexão recusada, HTTP 5xx. Esgotadas as tentativas, lançar `EmbeddingProviderError`, convertido em HTTP 503 com mensagem compreensível.
+- [x] Validar a dimensão de todo vetor retornado (`== EMBEDDING_DIMENSION`) antes de persistir.
+- [x] **Ingestão tudo-ou-nada:** gerar todos os vetores antes de abrir a transação de escrita, de modo que uma falha não deixe o documento parcialmente vetorizado.
+- [x] Criar a tabela `documents` (`id`, `name`, `sha256`, `page_count`, `embedding_model`, `created_at`) e vincular `document_chunks` por `document_id`.
+- [x] Migrar `document_chunks.embedding` para `Vector(1024)` e adicionar as colunas `section_title`, `page_start` e `page_end` (para citar "página N" nas respostas). Como `create_all` não altera tabelas existentes, criar o script `backend/scripts/migrate_03.sql` (drop + recriação) e documentar a necessidade de reingerir os PDFs.
+- [x] Criar índice **HNSW** (`vector_cosine_ops`) em `document_chunks.embedding`.
+- [x] Preservar o mapeamento página → texto no `pdf_parser.py` e propagá-lo pelo chunking.
+- [x] Recusar consultas a documentos ingeridos com um `embedding_model` diferente do configurado (orientar reingestão).
 
 ## Etapa 3: Mapa Mental por Map-Reduce (`backend/app/services/mind_map/`)
 - [ ] **Unidade de trabalho = seção** (saída do `MarkdownHeaderTextSplitter`), agrupando seções vizinhas pequenas e dividindo seções grandes até ~6.000 caracteres para caber no `num_ctx` de 8192 tokens do modelo 3B.

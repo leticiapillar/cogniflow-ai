@@ -4,7 +4,7 @@ import time
 from app.core.config import Settings, get_settings
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.mind_map import GenerateMapRequest, GenerateMapResponse
-from app.services.embeddings import EmbeddingService
+from app.services.embeddings import BaseEmbeddingProvider, get_embedding_provider
 from app.services.llm_provider import (
     BaseLLMProvider,
     ContextGroundedLocalLLMProvider,
@@ -16,6 +16,7 @@ from app.services.output_validator import (
 )
 from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
 from app.services.rag_retriever import RAGRetriever
+from app.use_cases.errors import EmbeddingModelMismatchError
 
 logger = logging.getLogger("cogniflow.use_cases.generate_mind_map")
 
@@ -27,16 +28,48 @@ class GenerateMindMapUseCase:
         self,
         repository: DocumentRepository,
         llm_provider: BaseLLMProvider | None = None,
-        retriever: RAGRetriever | None = None,
+        embedding_provider: BaseEmbeddingProvider | None = None,
         settings: Settings | None = None,
     ) -> None:
         self._repository = repository
         self._settings = settings or get_settings()
         self._llm_provider = llm_provider or get_llm_provider(settings=self._settings)
-        self._retriever = retriever or RAGRetriever(
-            repository=repository,
-            embedding_service=EmbeddingService(settings=self._settings),
+        self._embedding_provider = embedding_provider or get_embedding_provider(
+            self._settings
         )
+        self._retriever = RAGRetriever(
+            repository=repository,
+            embedding_provider=self._embedding_provider,
+        )
+
+    async def _retrieve_context(self, request: GenerateMapRequest) -> list[str]:
+        """Retrieve grounding chunks, refusing documents embedded with another model."""
+        document_id = None
+        if request.document_name:
+            document = await self._repository.get_document_by_name(request.document_name)
+            if document is None:
+                logger.warning(
+                    "Document '%s' not found; generating without context.",
+                    request.document_name,
+                )
+                return []
+            if (
+                document.embedding_model != self._embedding_provider.model_name
+                or document.embedding_dimension != self._embedding_provider.dimension
+            ):
+                raise EmbeddingModelMismatchError(
+                    document_name=document.name,
+                    stored_model=document.embedding_model,
+                    current_model=self._embedding_provider.model_name,
+                )
+            document_id = document.id
+
+        records = await self._retriever.retrieve_relevant_chunks(
+            query=request.query,
+            top_k=request.top_k,
+            document_id=document_id,
+        )
+        return [record.content for record in records]
 
     async def execute(self, request: GenerateMapRequest) -> GenerateMapResponse:
         """Execute RAG similarity search, invoke LLM in JSON mode, and validate output contract."""
@@ -48,12 +81,7 @@ class GenerateMindMapUseCase:
             request.document_name,
         )
 
-        retrieved_records = await self._retriever.retrieve_relevant_chunks(
-            query=request.query,
-            top_k=request.top_k,
-            document_name=request.document_name,
-        )
-        context_chunks = [record.content for record in retrieved_records]
+        context_chunks = await self._retrieve_context(request)
 
         user_prompt = build_user_prompt(
             query=request.query,

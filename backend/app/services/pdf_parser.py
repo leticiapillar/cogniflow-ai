@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import io
 import logging
 import re
@@ -12,45 +13,61 @@ class PDFParsingError(ValueError):
     """Raised when a PDF file cannot be parsed or contains no extractable text."""
 
 
+@dataclass(frozen=True)
+class PdfPage:
+    """Extracted text of one PDF page with its 1-based page number."""
+
+    number: int
+    text: str
+
+
+@dataclass(frozen=True)
+class ParsedPdf:
+    """Pages that contain text, plus the total page count of the document."""
+
+    pages: list[PdfPage]
+    page_count: int
+
+
 def _normalize_extracted_page_text(raw_text: str) -> str:
     """Clean word-per-line artifacts and private-use glyphs common in exported PDFs."""
-    text = raw_text.replace("\ue081", "(").replace("\ue082", ")")
+    text = raw_text.replace("", "(").replace("", ")")
     text = re.sub(r"\n[ \t]+\n", " ", text)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
-def parse_pdf_pages(file_bytes: bytes) -> list[str]:
-    """Parse a PDF byte stream and return extracted text for each non-empty page."""
+def parse_pdf(file_bytes: bytes) -> ParsedPdf:
+    """Parse a PDF byte stream, keeping the page number of every non-empty page."""
     if not file_bytes or not file_bytes.lstrip().startswith(b"%PDF"):
         raise PDFParsingError("Invalid file format: byte stream is not a valid PDF.")
 
     try:
         reader = PdfReader(io.BytesIO(file_bytes))
-        pages_text: list[str] = []
+        page_count = len(reader.pages)
+        pages: list[PdfPage] = []
         for index, page in enumerate(reader.pages):
             extracted = _normalize_extracted_page_text(page.extract_text() or "")
             if extracted:
-                pages_text.append(extracted)
+                pages.append(PdfPage(number=index + 1, text=extracted))
             else:
                 logger.debug("Page %d contained no extractable text.", index + 1)
     except (PdfReadError, Exception) as exc:
         logger.error("Failed to parse PDF document: %s", exc)
         raise PDFParsingError(f"Failed to read PDF document: {exc}") from exc
 
-    if not pages_text:
+    if not pages:
         raise PDFParsingError("No extractable text found in the PDF document.")
 
-    return pages_text
+    return ParsedPdf(pages=pages, page_count=page_count)
 
 
 def extract_text_from_pdf_bytes(file_bytes: bytes) -> str:
     """Extract and join text from all pages of a PDF byte stream."""
-    pages = parse_pdf_pages(file_bytes)
-    full_text = "\n\n".join(pages)
+    parsed = parse_pdf(file_bytes)
+    full_text = "\n\n".join(page.text for page in parsed.pages)
     logger.info(
-        "Extracted %d characters from %d PDF pages.", len(full_text), len(pages)
+        "Extracted %d characters from %d PDF pages.", len(full_text), len(parsed.pages)
     )
     return full_text
-

@@ -1,13 +1,22 @@
 import logging
 from typing import Sequence
+import uuid
 
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.models import DocumentChunkModel
+from app.repositories.models import (
+    SECTION_TITLE_MAX_LENGTH,
+    DocumentChunkModel,
+    DocumentModel,
+)
 from app.schemas.document import IngestedChunkPayload
 
 logger = logging.getLogger("cogniflow.repository")
+
+MIGRATION_HINT = (
+    "Run backend/scripts/migrate_03.sql, restart the backend, and re-ingest the PDFs."
+)
 
 
 class DocumentRepository:
@@ -28,69 +37,99 @@ class DocumentRepository:
             logger.error("Database connection check failed: %s", exc)
             return False
 
-    async def add_chunk(
-        self,
-        document_name: str,
-        chunk_index: int,
-        content: str,
-        embedding: list[float],
-    ) -> DocumentChunkModel:
-        """Persist a single document chunk along with its vector embedding."""
-        chunk = DocumentChunkModel(
-            document_name=document_name,
-            chunk_index=chunk_index,
-            content=content,
-            embedding=embedding,
+    async def check_schema(self, expected_dimension: int) -> list[str]:
+        """Report schema problems, e.g. a legacy table left over from a previous version."""
+        columns = await self._session.execute(
+            text(
+                "SELECT attname, atttypmod FROM pg_attribute "
+                "WHERE attrelid = to_regclass('document_chunks') "
+                "AND attnum > 0 AND NOT attisdropped"
+            )
         )
-        self._session.add(chunk)
-        await self._session.commit()
-        await self._session.refresh(chunk)
-        logger.debug(
-            "Stored chunk %d for document '%s' (id=%s).",
-            chunk_index,
-            document_name,
-            chunk.id,
-        )
-        return chunk
+        column_typmods = {name: typmod for name, typmod in columns.all()}
+        if not column_typmods:
+            return ["Table 'document_chunks' does not exist. Restart the backend to create it."]
+        if "document_id" not in column_typmods:
+            return [f"Table 'document_chunks' uses a legacy schema. {MIGRATION_HINT}"]
+        dimension = column_typmods.get("embedding")
+        if dimension != expected_dimension:
+            return [
+                f"Column 'document_chunks.embedding' has {dimension} dimensions, "
+                f"but EMBEDDING_DIMENSION={expected_dimension}. {MIGRATION_HINT}"
+            ]
+        return []
 
-    async def replace_document_chunks(
-        self,
-        document_name: str,
-        chunks: Sequence[IngestedChunkPayload],
-    ) -> list[DocumentChunkModel]:
-        """Replace existing chunks for a document and persist new embedded chunks in pgvector."""
-        await self._session.execute(
-            delete(DocumentChunkModel).where(
-                DocumentChunkModel.document_name == document_name
-            )
+    async def get_document_by_name(self, name: str) -> DocumentModel | None:
+        result = await self._session.execute(
+            select(DocumentModel).where(DocumentModel.name == name)
         )
-        models = [
-            DocumentChunkModel(
-                document_name=document_name,
-                chunk_index=item.chunk_index,
-                content=item.content,
-                embedding=item.embedding,
+        return result.scalar_one_or_none()
+
+    async def replace_document(
+        self,
+        name: str,
+        sha256: str,
+        page_count: int,
+        embedding_model: str,
+        embedding_dimension: int,
+        chunks: Sequence[IngestedChunkPayload],
+    ) -> tuple[DocumentModel, list[DocumentChunkModel]]:
+        """Atomically replace a document (and its chunks) by name."""
+        try:
+            await self._session.execute(
+                delete(DocumentModel).where(DocumentModel.name == name)
             )
-            for item in chunks
-        ]
-        self._session.add_all(models)
-        await self._session.commit()
-        for model in models:
+            document = DocumentModel(
+                id=uuid.uuid4(),
+                name=name,
+                sha256=sha256,
+                page_count=page_count,
+                embedding_model=embedding_model,
+                embedding_dimension=embedding_dimension,
+            )
+            self._session.add(document)
+            await self._session.flush()
+
+            chunk_models = [
+                DocumentChunkModel(
+                    document_id=document.id,
+                    chunk_index=item.chunk_index,
+                    content=item.content,
+                    section_title=(
+                        item.section_title[:SECTION_TITLE_MAX_LENGTH]
+                        if item.section_title
+                        else None
+                    ),
+                    page_start=item.page_start,
+                    page_end=item.page_end,
+                    embedding=item.embedding,
+                )
+                for item in chunks
+            ]
+            self._session.add_all(chunk_models)
+            await self._session.commit()
+        except Exception:
+            await self._session.rollback()
+            raise
+
+        await self._session.refresh(document)
+        for model in chunk_models:
             await self._session.refresh(model)
         logger.info(
-            "Persisted %d vector chunks in pgvector for document '%s'.",
-            len(models),
-            document_name,
+            "Persisted document '%s' with %d vector chunks (model=%s).",
+            name,
+            len(chunk_models),
+            embedding_model,
         )
-        return models
+        return document, chunk_models
 
     async def get_chunks_by_document(
-        self, document_name: str
+        self, document_id: uuid.UUID
     ) -> Sequence[DocumentChunkModel]:
-        """Retrieve all stored chunks for a given document ordered by chunk_index."""
+        """Retrieve all stored chunks for a document ordered by chunk_index."""
         statement = (
             select(DocumentChunkModel)
-            .where(DocumentChunkModel.document_name == document_name)
+            .where(DocumentChunkModel.document_id == document_id)
             .order_by(DocumentChunkModel.chunk_index.asc())
         )
         result = await self._session.execute(statement)
@@ -98,7 +137,7 @@ class DocumentRepository:
 
     async def get_chunks_by_indices(
         self,
-        document_name: str,
+        document_id: uuid.UUID,
         chunk_indices: Sequence[int],
     ) -> Sequence[DocumentChunkModel]:
         """Retrieve specific chunks for a document matching the requested chunk indices."""
@@ -107,7 +146,7 @@ class DocumentRepository:
         statement = (
             select(DocumentChunkModel)
             .where(
-                DocumentChunkModel.document_name == document_name,
+                DocumentChunkModel.document_id == document_id,
                 DocumentChunkModel.chunk_index.in_(list(chunk_indices)),
             )
             .order_by(DocumentChunkModel.chunk_index.asc())
@@ -118,15 +157,26 @@ class DocumentRepository:
     async def search_similar_chunks(
         self,
         query_embedding: list[float],
+        embedding_model: str,
         top_k: int = 5,
-        document_name: str | None = None,
+        document_id: uuid.UUID | None = None,
     ) -> Sequence[DocumentChunkModel]:
-        """Retrieve the top-K most similar chunks using pgvector cosine distance."""
-        statement = select(DocumentChunkModel)
-        if document_name:
-            statement = statement.where(
-                DocumentChunkModel.document_name == document_name
-            )
+        """Retrieve the top-K most similar chunks by cosine distance.
+
+        Only chunks embedded with `embedding_model` are compared: vectors from other
+        models are not comparable with the query vector.
+        """
+        # With a WHERE filter, a plain HNSW scan can return fewer than top_k rows.
+        # Iterative scans (pgvector >= 0.8) keep scanning until enough rows match.
+        await self._session.execute(text("SET LOCAL hnsw.iterative_scan = strict_order"))
+
+        statement = (
+            select(DocumentChunkModel)
+            .join(DocumentModel, DocumentModel.id == DocumentChunkModel.document_id)
+            .where(DocumentModel.embedding_model == embedding_model)
+        )
+        if document_id is not None:
+            statement = statement.where(DocumentChunkModel.document_id == document_id)
         statement = statement.order_by(
             DocumentChunkModel.embedding.cosine_distance(query_embedding)
         ).limit(top_k)

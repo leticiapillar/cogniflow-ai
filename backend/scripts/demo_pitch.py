@@ -8,8 +8,9 @@ from app.services.evaluation_metrics import (
     calculate_entity_recall,
     extract_reference_entities,
 )
+from app.services.embeddings import BaseEmbeddingProvider
 from app.services.ingestion_pipeline import IngestionOrchestrator
-from app.services.llm_provider import get_llm_provider
+from app.services.llm_provider import BaseLLMProvider, get_llm_provider
 from app.services.output_validator import validate_and_parse_mind_map_json
 from app.services.pdf_parser import extract_text_from_pdf_bytes
 from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
@@ -18,17 +19,19 @@ from app.services.prompts import MIND_MAP_SYSTEM_PROMPT, build_user_prompt
 async def run_live_pitch_demo(
     pdf_path: Path,
     query: str = "Arquitetura Técnica CogniFlow AI RAG pgvector FastAPI",
+    embedding_provider: BaseEmbeddingProvider | None = None,
+    llm_provider: BaseLLMProvider | None = None,
 ) -> tuple[GenerateMapResponse, RecallEvaluationResult, float]:
     """Execute the end-to-end prototype conversion of a PDF for the live pitch."""
     start_time = time.perf_counter()
     pdf_bytes = pdf_path.read_bytes()
 
-    orchestrator = IngestionOrchestrator()
-    embedded_chunks = await orchestrator.process_pdf_bytes(pdf_bytes)
-    context_texts = [chunk.content for chunk in embedded_chunks]
+    orchestrator = IngestionOrchestrator(embedding_provider=embedding_provider)
+    ingestion = await orchestrator.process_pdf_bytes(pdf_bytes)
+    context_texts = [chunk.content for chunk in ingestion.chunks]
 
     user_prompt = build_user_prompt(query=query, context_chunks=context_texts)
-    llm_provider = get_llm_provider()
+    llm_provider = llm_provider or get_llm_provider()
     raw_json = await llm_provider.generate_mind_map_json(
         system_prompt=MIND_MAP_SYSTEM_PROMPT,
         user_prompt=user_prompt,

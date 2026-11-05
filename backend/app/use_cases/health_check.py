@@ -26,9 +26,14 @@ class HealthCheckUseCase:
         db_connected = await self._repository.check_connection()
         readiness = await self._readiness_checker(self._settings)
 
-        issues = list(readiness.issues)
-        if not db_connected:
-            issues.insert(0, "Database or pgvector extension is not available.")
+        issues: list[str] = []
+        if db_connected:
+            issues.extend(
+                await self._repository.check_schema(self._settings.embedding_dimension)
+            )
+        else:
+            issues.append("Database or pgvector extension is not available.")
+        issues.extend(readiness.issues)
 
         return HealthResponse(
             status="healthy" if not issues else "degraded",
