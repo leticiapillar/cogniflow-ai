@@ -10,10 +10,8 @@ O **CogniFlow AI** é uma plataforma educacional assistiva que utiliza **RAG (Re
 
 ## Principais Recursos Pedagógicos e de Acessibilidade
 
-- **Estruturação Pedagógica em 2 Estágios**:
-  1. **Síntese Direta**: Responde diretamente à dúvida ou tema pesquisado no nó central (`root`).
-  2. **Árvore Taxonômica Multi-Nível**: Organiza o conteúdo em **Tema Central (`root`) → Eixos Temáticos (`topic`) → Conceitos (`concept`) e Exemplos Práticos (`example`)**, com arestas rotuladas por verbos semânticos explicativos.
-- **Abrangência RAG Adaptativa (`top_k`)**: Seletor pedagógico de cobertura do material (**Essencial — 5 trechos**, **Detalhada — 10 trechos**, **Ampla — 15 trechos** e **Completa — 20 trechos**), utilizando expansão de janela de contexto e amostragem estratificada por seção em ordem canônica (`chunk_index ASC`).
+- **Mapa Mental do Material Inteiro (map-reduce)**: cada seção do PDF é lida separadamente pelo LLM (*map*) e os conceitos são unidos e organizados em uma árvore **Tema Central (`root`) → Eixos de Estudo numerados (`topic`, de 3 a 5) → Conceitos (`concept`, até 5 por eixo) → Exemplos (`example`, até 2 por conceito)** (*reduce*). Cada nó cita os trechos de origem do PDF, e cada tipo de relação aparece sempre com o mesmo verbo (vocabulário controlado).
+- **Falhas Explícitas, sem Substitutos**: se uma seção não puder ser processada, o mapa é entregue como `partial`, indicando a seção, que pode ser reprocessada sozinha. Nenhum conteúdo é gerado por regras fixas no lugar da IA.
 - **Acessibilidade Linguística e Cognitiva (Surdos, TDAH e TEA)**:
   - **Surdos (Português L2)**: Frases em ordem direta (`Sujeito → Verbo → Objeto`) e voz ativa, evitando subordinações longas.
   - **TEA**: Linguagem 100% literal e objetiva, sem metáforas ou ambiguidades.
@@ -41,7 +39,7 @@ cogniflow-ai/
 │   ├── app/
 │   │   ├── core/                             # Configurações (Pydantic Settings), logs e conexão assíncrona DB
 │   │   ├── repositories/                     # Persistência e busca por similaridade vetorial (pgvector)
-│   │   ├── routers/                          # Endpoints REST (/api/health, /api/documents, /api/generate-map)
+│   │   ├── routers/                          # Endpoints REST (/api/health, /api/documents, /api/documents/{id}/mind-map)
 │   │   ├── schemas/                          # Contratos estritos de entrada/saída (Pydantic)
 │   │   ├── services/                         # PDF parser, chunking, estruturação pedagógica, RAG, LLM e métricas
 │   │   └── use_cases/                        # Regras de negócio da aplicação
@@ -221,19 +219,29 @@ curl -X GET http://localhost:8000/api/documents/Proposta_Projeto_CogniFlow_AI.pd
 
 Cada trecho traz `section_title`, `page_start` e `page_end`, usados para citar a página de origem.
 
-### 4.4. Geração de Mapa Mental via RAG (`POST /api/generate-map`)
+### 4.4. Mapa Mental do Material Inteiro (map-reduce)
 
-O parâmetro `top_k` aceita valores de `1` a `20` (na interface, os presets correspondem a `5`, `10`, `15` e `20`):
+O mapa é gerado **automaticamente em segundo plano** logo após a ingestão, cobrindo o PDF inteiro (sem pergunta nem `top_k`):
+
+1. **Map:** uma chamada ao LLM por seção do PDF extrai os conceitos-chave, cada um citando os trechos de origem (`source_chunks`).
+2. **Reduce:** conceitos repetidos entre seções são unidos por similaridade de embeddings; depois o LLM organiza de 3 a 5 eixos de estudo numerados, com até 5 conceitos cada.
+
+Acompanhe o progresso e obtenha o mapa usando o `document_id` devolvido pela ingestão:
 
 ```bash
-curl -X POST http://localhost:8000/api/generate-map \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Arquitetura Técnica PostgreSQL pgvector FastAPI",
-    "document_name": "Proposta_Projeto_CogniFlow_AI.pdf",
-    "top_k": 10
-  }'
+curl http://localhost:8000/api/documents/<document_id>/mind-map
 ```
+
+O campo `status` vale `pending`, `processing`, `ready`, `partial` (mapa gerado sem algumas seções, listadas em `failed_sections`) ou `failed`. O campo `progress.message` traz uma mensagem literal, como *"Lendo a seção 3 de 12: Cloroplastos."*. Reenviar um PDF idêntico reaproveita o mapa já gerado.
+
+```bash
+# Gerar o mapa novamente
+curl -X POST http://localhost:8000/api/documents/<document_id>/mind-map/regenerate
+# Reprocessar apenas uma seção que falhou
+curl -X POST http://localhost:8000/api/documents/<document_id>/mind-map/sections/<section_index>/retry
+```
+
+> O endpoint antigo `POST /api/generate-map` foi aposentado e responde **HTTP 410**.
 
 ---
 
@@ -247,9 +255,15 @@ Na raiz do projeto (com o serviço do Docker ativo, pois o **Testcontainers** so
 ./backend/.venv/bin/pytest -c backend/pyproject.toml backend/tests -v
 ```
 
+Esses testes usam provedores falsos de IA e verificam o encadeamento das etapas, **não** a qualidade pedagógica. A avaliação com os modelos reais é separada e exige o Ollama rodando com os modelos baixados:
+
+```bash
+./backend/.venv/bin/pytest -c backend/pyproject.toml backend/tests -m llm -v
+```
+
 ### 5.2. Rodar o Script de Demonstração ao Vivo (Pitch)
 
-Para executar a conversão fim-a-fim do PDF da proposta com medição de **Recall** e **Latência**:
+Para executar a conversão fim-a-fim do PDF da proposta (ingestão em memória + map-reduce, com o Ollama) com medição de **Recall** e **Latência**:
 
 ```bash
 PYTHONPATH=backend ./backend/.venv/bin/python backend/scripts/demo_pitch.py

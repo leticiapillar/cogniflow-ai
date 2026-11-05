@@ -11,11 +11,11 @@ from sqlalchemy.ext.asyncio import (
 )
 from testcontainers.community.postgres import PostgresContainer
 
-from app.core.database import get_db_session, initialize_database
+from app.core.database import get_db_session, get_session_factory, initialize_database
 from app.main import app
 from app.routers.dependencies import provide_embedding_provider, provide_llm_provider
-from app.services.llm_provider import ContextGroundedLocalLLMProvider
 from tests.fakes.embeddings import FakeEmbeddingProvider
+from tests.fakes.llm import FakeLLMProvider
 
 
 @pytest.fixture(scope="session")
@@ -57,6 +57,7 @@ async def db_session(
 
 @pytest_asyncio.fixture
 async def async_client(
+    db_engine: AsyncEngine,
     db_session: AsyncSession,
 ) -> AsyncGenerator[AsyncClient, None]:
     """Provide an HTTPX AsyncClient with the database session dependency overridden."""
@@ -66,9 +67,13 @@ async def async_client(
 
     app.dependency_overrides[get_db_session] = override_get_db_session
     # Never reach a real Ollama server from API tests.
-    app.dependency_overrides[provide_embedding_provider] = FakeEmbeddingProvider
-    # Temporary: the heuristic provider is removed in plan 03, Etapa 3 (FakeLLMProvider).
-    app.dependency_overrides[provide_llm_provider] = ContextGroundedLocalLLMProvider
+    app.dependency_overrides[provide_embedding_provider] = lambda: FakeEmbeddingProvider()
+    app.dependency_overrides[provide_llm_provider] = lambda: FakeLLMProvider()
+    # Background work (mind map generation) opens its own sessions on the test database.
+    background_sessions = async_sessionmaker(
+        bind=db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    app.dependency_overrides[get_session_factory] = lambda: background_sessions
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client

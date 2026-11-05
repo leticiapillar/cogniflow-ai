@@ -1,11 +1,8 @@
 from pathlib import Path
 
 from httpx import AsyncClient
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import app
-from app.repositories.models import DocumentModel
 from app.routers.dependencies import provide_embedding_provider
 from app.services.chunking import chunk_pages
 from app.services.pdf_parser import PdfPage, parse_pdf
@@ -15,8 +12,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PHOTOSYNTHESIS_PDF = PROJECT_ROOT / "fotossintese-texto-selecionavel.pdf"
 
 
-def upload(name: str) -> dict[str, tuple[str, bytes, str]]:
-    return {"file": (name, PHOTOSYNTHESIS_PDF.read_bytes(), "application/pdf")}
+PROPOSAL_PDF = PROJECT_ROOT / "Proposta_Projeto_CogniFlow_AI.pdf"
+
+
+def upload(name: str, pdf: Path = PHOTOSYNTHESIS_PDF) -> dict[str, tuple[str, bytes, str]]:
+    return {"file": (name, pdf.read_bytes(), "application/pdf")}
 
 
 def test_chunks_keep_section_titles_and_page_ranges() -> None:
@@ -51,7 +51,7 @@ def test_real_pdf_chunks_map_to_existing_pages() -> None:
 async def test_ingestion_returns_503_when_embedding_provider_fails(
     async_client: AsyncClient,
 ) -> None:
-    app.dependency_overrides[provide_embedding_provider] = FailingEmbeddingProvider
+    app.dependency_overrides[provide_embedding_provider] = lambda: FailingEmbeddingProvider()
     response = await async_client.post(
         "/api/documents/ingest", files=upload("falha-embedding.pdf")
     )
@@ -69,32 +69,10 @@ async def test_failed_reingestion_keeps_previous_version(
     first = await async_client.post("/api/documents/ingest", files=upload(name))
     assert first.status_code == 201
 
-    app.dependency_overrides[provide_embedding_provider] = FailingEmbeddingProvider
-    second = await async_client.post("/api/documents/ingest", files=upload(name))
+    # A new version of the PDF (different content) must be embedded again, and fails.
+    app.dependency_overrides[provide_embedding_provider] = lambda: FailingEmbeddingProvider()
+    second = await async_client.post("/api/documents/ingest", files=upload(name, PROPOSAL_PDF))
     assert second.status_code == 503
 
     chunks = await async_client.get(f"/api/documents/{name}/chunks")
     assert len(chunks.json()) == first.json()["total_chunks"]
-
-
-async def test_generate_map_refuses_document_from_another_embedding_model(
-    async_client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    name = "fotossintese-modelo-antigo.pdf"
-    ingest = await async_client.post("/api/documents/ingest", files=upload(name))
-    assert ingest.status_code == 201
-
-    await db_session.execute(
-        update(DocumentModel)
-        .where(DocumentModel.name == name)
-        .values(embedding_model="nomic-embed-text")
-    )
-    await db_session.commit()
-
-    response = await async_client.post(
-        "/api/generate-map",
-        json={"query": "O que é fotossíntese?", "document_name": name, "top_k": 3},
-    )
-    assert response.status_code == 409
-    assert "Upload the PDF again" in response.json()["detail"]

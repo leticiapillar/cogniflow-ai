@@ -1,8 +1,35 @@
-from typing import List, Optional
+from datetime import datetime
+from typing import Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
-from app.services.sanitizer import sanitize_text_input
+NodeCategory = Literal["root", "topic", "concept", "example"]
+
+RelationType = Literal[
+    "has_part",
+    "is_a",
+    "causes",
+    "depends_on",
+    "precedes",
+    "contrasts",
+    "exemplified_by",
+]
+
+# One fixed verb per relation type, read from parent to child: the same relation is
+# always shown with the same words (predictability for autistic students).
+RELATION_LABELS: dict[str, str] = {
+    "has_part": "inclui",
+    "is_a": "tem como tipo",
+    "causes": "produz",
+    "depends_on": "depende de",
+    "precedes": "vem antes de",
+    "contrasts": "contrasta com",
+    "exemplified_by": "exemplificado por",
+}
+
+MindMapStatus = Literal["pending", "processing", "ready", "partial", "failed"]
+MindMapPhase = Literal["pending", "mapping", "consolidating", "organizing", "done"]
 
 
 class NodePosition(BaseModel):
@@ -15,20 +42,19 @@ class NodePosition(BaseModel):
 class MindMapNodeData(BaseModel):
     """Payload inside a React Flow mind map node."""
 
-    label: str = Field(
-        ...,
-        min_length=1,
-        max_length=200,
-        description="Concise title of the concept.",
+    label: str = Field(..., min_length=1, max_length=200, description="Concise title (1-6 words).")
+    summary: str | None = Field(
+        default=None, max_length=1000, description="Literal, short explanation (1-2 sentences)."
     )
-    summary: Optional[str] = Field(
-        default=None,
-        max_length=1000,
-        description="Accessible, simplified explanation of the concept.",
+    category: NodeCategory = Field(default="concept", description="Level in the hierarchy.")
+    order: int | None = Field(
+        default=None, ge=1, description="Suggested study order (set on topic nodes)."
     )
-    category: Optional[str] = Field(
-        default="concept",
-        description="Semantic category of the node (e.g., root, topic, concept, example).",
+    acronyms: dict[str, str] = Field(
+        default_factory=dict, description="Acronyms used by the node, already expanded."
+    )
+    source_chunks: list[int] = Field(
+        default_factory=list, description="Indices of the document chunks the node comes from."
     )
 
 
@@ -36,10 +62,7 @@ class MindMapNode(BaseModel):
     """Strict contract for a React Flow node."""
 
     id: str = Field(..., min_length=1, description="Unique identifier for the node.")
-    type: str = Field(
-        default="default",
-        description="React Flow node type (e.g., input, default, output, custom).",
-    )
+    type: str = Field(default="default", description="React Flow node type (input for the root).")
     data: MindMapNodeData = Field(..., description="Visual and semantic node data.")
     position: NodePosition = Field(
         default_factory=NodePosition,
@@ -48,66 +71,53 @@ class MindMapNode(BaseModel):
 
 
 class MindMapEdge(BaseModel):
-    """Strict contract for a directed connection (edge) between two React Flow nodes."""
+    """Strict contract for a directed parent -> child connection between two nodes."""
 
     id: str = Field(..., min_length=1, description="Unique identifier for the edge.")
-    source: str = Field(..., min_length=1, description="ID of the origin node.")
-    target: str = Field(..., min_length=1, description="ID of the destination node.")
-    label: Optional[str] = Field(
-        default=None,
-        max_length=120,
-        description="Semantic relationship label connecting source and target.",
-    )
-    animated: bool = Field(
-        default=False, description="Whether the edge is visually animated."
-    )
+    source: str = Field(..., min_length=1, description="ID of the parent node.")
+    target: str = Field(..., min_length=1, description="ID of the child node.")
+    relation: RelationType = Field(..., description="Relation type from the controlled vocabulary.")
+    label: str = Field(..., max_length=120, description="Fixed verb shown for the relation.")
+    animated: bool = Field(default=False, description="Whether the edge is visually animated.")
 
 
-class GenerateMapRequest(BaseModel):
-    """Request contract for `/api/generate-map`."""
+class MindMapGraph(BaseModel):
+    """Mind map of a whole document as a tree: root -> topics -> concepts -> examples."""
 
-    query: str = Field(
-        ...,
-        min_length=3,
-        max_length=2000,
-        description="Topic or question to generate the visual mind map from.",
-    )
-    document_name: Optional[str] = Field(
-        default=None,
-        description="Optional filter to restrict RAG retrieval to a specific document.",
-    )
-    top_k: int = Field(
-        default=5,
-        ge=1,
-        le=20,
-        description="Number of relevant semantic chunks to retrieve from pgvector.",
-    )
-
-    @field_validator("query")
-    @classmethod
-    def sanitize_and_validate_query(cls, value: str) -> str:
-        """Sanitize query text and block prompt injection attempts."""
-        return sanitize_text_input(value, reject_on_injection=True)
+    topic: str = Field(..., min_length=1, description="Central theme of the class material.")
+    nodes: list[MindMapNode] = Field(..., min_length=1)
+    edges: list[MindMapEdge] = Field(default_factory=list)
 
 
-class GenerateMapResponse(BaseModel):
-    """Strict JSON output contract for `/api/generate-map` consumed by React Flow."""
+class MindMapProgress(BaseModel):
+    """Predictable progress information for the generation in course."""
 
-    topic: str = Field(..., min_length=1, description="Main topic of the mind map.")
-    nodes: List[MindMapNode] = Field(
-        ..., min_length=1, description="List of mind map concept nodes."
+    phase: MindMapPhase
+    done: int = Field(..., ge=0, description="Sections already read.")
+    total: int = Field(..., ge=0, description="Sections to read.")
+    current_section: str | None = Field(default=None)
+    message: str = Field(..., description="Literal progress message in Portuguese.")
+
+
+class FailedSection(BaseModel):
+    """A section that could not be processed (left out of a partial map)."""
+
+    section_index: int = Field(..., ge=0)
+    section_title: str | None = None
+    reason: str
+
+
+class MindMapStatusResponse(BaseModel):
+    """Contract for `GET /api/documents/{document_id}/mind-map`."""
+
+    document_id: UUID
+    document_name: str
+    status: MindMapStatus
+    progress: MindMapProgress
+    failed_sections: list[FailedSection] = Field(default_factory=list)
+    mind_map: MindMapGraph | None = Field(
+        default=None, description="Present when status is 'ready' or 'partial'."
     )
-    edges: List[MindMapEdge] = Field(
-        default_factory=list,
-        description="List of directed edges connecting the nodes.",
-    )
-    source_chunks_used: int = Field(
-        default=0,
-        ge=0,
-        description="Count of retrieved document chunks used as grounding context.",
-    )
-    generation_latency_ms: float = Field(
-        default=0.0,
-        ge=0.0,
-        description="End-to-end RAG + LLM generation latency in milliseconds.",
-    )
+    llm_model: str
+    error: str | None = Field(default=None, description="Reason when status is 'failed'.")
+    updated_at: datetime

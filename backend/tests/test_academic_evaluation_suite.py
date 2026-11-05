@@ -1,19 +1,20 @@
-import json
 from pathlib import Path
 
 from httpx import AsyncClient
 import pytest
 
 from app.core.config import Settings
-from app.schemas.mind_map import GenerateMapResponse
+from app.main import app
+from app.routers.dependencies import provide_embedding_provider, provide_llm_provider
+from app.schemas.mind_map import MindMapGraph, MindMapStatusResponse
 from app.services.evaluation_metrics import (
     calculate_entity_recall,
     evaluate_render_success_rate,
 )
-from app.services.llm_provider import ContextGroundedLocalLLMProvider
 from app.services.security_audit import audit_environment_isolation
 from scripts.demo_pitch import run_live_pitch_demo
 from tests.fakes.embeddings import FakeEmbeddingProvider
+from tests.fakes.llm import FakeLLMProvider
 from tests.fixtures.academic_materials import (
     TWENTY_ACADEMIC_MATERIALS,
     AcademicMaterialSample,
@@ -32,36 +33,24 @@ def test_twenty_academic_dataset_completeness() -> None:
 
 
 def test_render_success_rate_metric_calculation() -> None:
-    """Verify Render Success Rate accurately distinguishes valid and invalid JSON outputs."""
-    valid_json = json.dumps(
-        {
-            "topic": "Thermodynamics",
-            "nodes": [
-                {
-                    "id": "node-root",
-                    "type": "input",
-                    "data": {"label": "Entropy", "summary": "Disorder", "category": "root"},
-                }
-            ],
-            "edges": [],
-        }
-    )
-    invalid_json = "{malformed json"
-    dangling_edge_json = json.dumps(
-        {
-            "topic": "Broken Graph",
-            "nodes": [
-                {
-                    "id": "node-root",
-                    "type": "input",
-                    "data": {"label": "Root", "summary": "Summary", "category": "root"},
-                }
-            ],
-            "edges": [{"id": "e1", "source": "node-root", "target": "missing"}],
-        }
-    )
+    """Render Success Rate counts only graphs that parse and respect the tree rules."""
+    root = {"id": "node-root", "type": "input", "data": {"label": "Raiz", "category": "root"}}
+    topic = {"id": "t1", "data": {"label": "Eixo", "category": "topic", "order": 1, "source_chunks": [0]}}
+    concept = {"id": "k1", "data": {"label": "Conceito", "category": "concept", "source_chunks": [0]}}
 
-    rate = evaluate_render_success_rate([valid_json, valid_json, invalid_json, dangling_edge_json])
+    def edge(source: str, target: str) -> dict[str, str]:
+        return {"id": f"{source}-{target}", "source": source, "target": target,
+                "relation": "has_part", "label": "inclui"}
+
+    valid = MindMapGraph.model_validate(
+        {"topic": "Tema", "nodes": [root, topic, concept],
+         "edges": [edge("node-root", "t1"), edge("t1", "k1")]}
+    ).model_dump_json()
+    dangling = MindMapGraph.model_validate(
+        {"topic": "Tema", "nodes": [root, topic], "edges": [edge("node-root", "t1"), edge("t1", "missing")]}
+    ).model_dump_json()
+
+    rate = evaluate_render_success_rate([valid, valid, "{malformed json", dangling])
     assert rate == 0.5
 
 
@@ -89,20 +78,29 @@ def test_environment_variable_isolation_and_secret_masking() -> None:
 
 
 @pytest.mark.asyncio
-async def test_live_pitch_prototype_pdf_conversion() -> None:
-    """Verify the live pitch demo script converts Proposta_Projeto_CogniFlow_AI.pdf in under 2 minutes."""
-    mind_map, recall_result, total_latency_ms = await run_live_pitch_demo(
+async def test_live_pitch_demo_runs_the_map_reduce_pipeline() -> None:
+    """The demo wiring (ingest -> map -> reduce) works offline with test doubles."""
+    result = await run_live_pitch_demo(
         SAMPLE_PDF_PATH,
         embedding_provider=FakeEmbeddingProvider(),
-        llm_provider=ContextGroundedLocalLLMProvider(),
+        llm_provider=FakeLLMProvider(),
     )
+    assert result.sections >= 1
+    assert result.failed_sections == 0
+    assert result.mind_map.nodes[0].data.category == "root"
+    assert len(result.mind_map.edges) == len(result.mind_map.nodes) - 1
 
-    assert len(mind_map.nodes) >= 2
-    assert len(mind_map.edges) >= 1
-    assert recall_result.recall_score >= 0.5
-    assert total_latency_ms < 120_000.0
+
+@pytest.mark.llm
+@pytest.mark.asyncio
+async def test_live_pitch_demo_with_ollama() -> None:
+    """Quality check with the real models (pytest -m llm)."""
+    result = await run_live_pitch_demo(SAMPLE_PDF_PATH)
+    assert result.failed_sections == 0
+    assert result.recall.recall_score >= 0.5
 
 
+@pytest.mark.llm
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "sample",
@@ -113,38 +111,27 @@ async def test_twenty_academic_materials_end_to_end_evaluation(
     sample: AcademicMaterialSample,
     async_client: AsyncClient,
 ) -> None:
-    """Iterate over all 20 academic materials, measuring Recall, Render Success, and Latency."""
-    pdf_bytes = build_valid_pdf_bytes(sample.content)
-    files = {"file": (sample.filename, pdf_bytes, "application/pdf")}
+    """Ingest each material, generate its whole-document map with Ollama, and measure recall."""
+    app.dependency_overrides.pop(provide_embedding_provider, None)
+    app.dependency_overrides.pop(provide_llm_provider, None)
 
+    files = {"file": (sample.filename, build_valid_pdf_bytes(sample.content), "application/pdf")}
     ingest_response = await async_client.post("/api/documents/ingest", files=files)
     assert ingest_response.status_code == 201
-    assert "X-Process-Time-Ms" in ingest_response.headers
+    document_id = ingest_response.json()["document_id"]
 
-    map_response = await async_client.post(
-        "/api/generate-map",
-        json={
-            "query": sample.query,
-            "document_name": sample.filename,
-            "top_k": 5,
-        },
+    # The background generation finishes before the ASGI test transport returns.
+    status = MindMapStatusResponse.model_validate(
+        (await async_client.get(f"/api/documents/{document_id}/mind-map")).json()
     )
-    assert map_response.status_code == 200
-    assert "X-Process-Time-Ms" in map_response.headers
-    header_latency_ms = float(map_response.headers["X-Process-Time-Ms"])
-
-    validated_map = GenerateMapResponse.model_validate(map_response.json())
-    assert validated_map.source_chunks_used >= 1
-    assert validated_map.generation_latency_ms > 0.0
-    assert validated_map.generation_latency_ms < 120_000.0
-    assert header_latency_ms < 120_000.0
+    assert status.status in ("ready", "partial"), status.error
+    assert status.mind_map is not None
 
     recall = calculate_entity_recall(
         expected_entities=sample.expected_entities,
-        mind_map=validated_map,
+        mind_map=status.mind_map,
     )
     assert recall.recall_score >= 0.75, (
         f"Recall too low for {sample.filename}: {recall.recall_score} "
         f"(missing: {recall.missing_entities})"
     )
-

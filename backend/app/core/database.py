@@ -50,3 +50,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
 
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """FastAPI dependency for work that outlives the request (background generation)."""
+    return AsyncSessionLocal

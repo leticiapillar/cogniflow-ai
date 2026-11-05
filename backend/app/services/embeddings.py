@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
 import asyncio
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 import logging
 
 import httpx
 
 from app.core.config import Settings, get_settings
+from app.services.ollama_http import OllamaRequestError, Sleep, post_with_retry
 
 logger = logging.getLogger("cogniflow.services.embeddings")
 
@@ -43,7 +44,7 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
         settings: Settings | None = None,
         *,
         transport: httpx.AsyncBaseTransport | None = None,
-        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        sleep: Sleep = asyncio.sleep,
         batch_size: int = 16,
         max_attempts: int = 3,
         base_delay_seconds: float = 0.5,
@@ -73,40 +74,20 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
     async def _embed_batch(
         self, client: httpx.AsyncClient, batch: list[str]
     ) -> list[list[float]]:
-        """Embed one batch, retrying with exponential backoff on transient failures only."""
-        last_error = ""
-        for attempt in range(1, self._max_attempts + 1):
-            try:
-                response = await client.post(
-                    self._url, json={"model": self.model_name, "input": batch}
-                )
-            except httpx.TransportError as exc:  # timeouts, refused or dropped connections
-                last_error = f"{type(exc).__name__}: {exc}"
-            else:
-                if response.status_code < 400:
-                    return self._parse_vectors(response, expected_count=len(batch))
-                if response.status_code < 500:
-                    raise EmbeddingProviderError(
-                        f"Ollama rejected the embedding request for model "
-                        f"'{self.model_name}' (HTTP {response.status_code}): {response.text[:200]}"
-                    )
-                last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-
-            if attempt < self._max_attempts:
-                delay = self._base_delay_seconds * 2 ** (attempt - 1)
-                logger.warning(
-                    "Embedding attempt %d/%d failed (%s); retrying in %.1fs.",
-                    attempt,
-                    self._max_attempts,
-                    last_error,
-                    delay,
-                )
-                await self._sleep(delay)
-
-        raise EmbeddingProviderError(
-            f"Ollama embedding model '{self.model_name}' is unavailable after "
-            f"{self._max_attempts} attempts: {last_error}"
-        )
+        """Embed one batch, retrying transient failures (never substituting another model)."""
+        try:
+            response = await post_with_retry(
+                client,
+                self._url,
+                {"model": self.model_name, "input": batch},
+                description=f"embedding model '{self.model_name}'",
+                max_attempts=self._max_attempts,
+                base_delay_seconds=self._base_delay_seconds,
+                sleep=self._sleep,
+            )
+        except OllamaRequestError as exc:
+            raise EmbeddingProviderError(str(exc)) from exc
+        return self._parse_vectors(response, expected_count=len(batch))
 
     def _parse_vectors(
         self, response: httpx.Response, expected_count: int

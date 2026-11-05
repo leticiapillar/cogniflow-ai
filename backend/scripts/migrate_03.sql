@@ -12,6 +12,7 @@
 -- Then restart the backend: the new tables and index are created on startup.
 
 BEGIN;
+DROP TABLE IF EXISTS mind_maps;
 DROP TABLE IF EXISTS document_chunks;
 DROP TABLE IF EXISTS documents;
 ALTER EXTENSION vector UPDATE;

@@ -10,7 +10,10 @@ from app.core.database import AsyncSessionLocal, initialize_database
 from app.core.logging import configure_logging
 from app.repositories.document_repository import DocumentRepository
 from app.routers import document_router, health_router, mind_map_router
+from app.services.embeddings import get_embedding_provider
+from app.services.llm_provider import get_llm_provider
 from app.services.ollama_readiness import check_ollama_readiness
+from app.use_cases.mind_map_generation import MindMapGenerationUseCase
 
 
 @asynccontextmanager
@@ -26,6 +29,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         for issue in schema_issues:
             logger.error("Database schema problem: %s", issue)
+        if not schema_issues:
+            interrupted = await MindMapGenerationUseCase(
+                session_factory=AsyncSessionLocal,
+                llm_provider=get_llm_provider(),
+                embedding_provider=get_embedding_provider(),
+            ).mark_interrupted()
+            if interrupted:
+                logger.warning("Marked %d interrupted mind map generations as failed.", interrupted)
     except Exception as exc:
         logger.warning("Database auto-initialization skipped on startup: %s", exc)
 

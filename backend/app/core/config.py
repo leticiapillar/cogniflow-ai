@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     )
     ollama_llm_model: str = Field(default="llama3.2:3b", alias="OLLAMA_LLM_MODEL")
     ollama_num_ctx: int = Field(default=8192, gt=0, alias="OLLAMA_NUM_CTX")
+    ollama_num_predict: int = Field(default=2048, gt=0, alias="OLLAMA_NUM_PREDICT")
+    # A 3B model on CPU can take minutes per answer; this bounds a single request.
+    ollama_llm_timeout_seconds: float = Field(
+        default=300.0, gt=0, alias="OLLAMA_LLM_TIMEOUT_SECONDS"
+    )
 
     @field_validator("embedding_provider", "llm_provider", mode="before")
     @classmethod

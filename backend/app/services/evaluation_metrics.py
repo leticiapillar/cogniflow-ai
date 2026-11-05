@@ -2,11 +2,10 @@ from dataclasses import dataclass
 import re
 from typing import Sequence
 
-from app.schemas.mind_map import GenerateMapResponse
-from app.services.output_validator import (
-    LLMOutputValidationError,
-    validate_and_parse_mind_map_json,
-)
+from pydantic import ValidationError
+
+from app.schemas.mind_map import MindMapGraph
+from app.services.mind_map.validation import validate_mind_map_graph
 
 
 @dataclass(frozen=True)
@@ -48,7 +47,7 @@ def extract_reference_entities(academic_text: str) -> list[str]:
 
 def calculate_entity_recall(
     expected_entities: Sequence[str],
-    mind_map: GenerateMapResponse,
+    mind_map: MindMapGraph,
 ) -> RecallEvaluationResult:
     """Compute entity coverage (Recall) by crossing PDF entities with generated JSON nodes."""
     cleaned_expected = [e.strip() for e in expected_entities if e and e.strip()]
@@ -94,17 +93,17 @@ def calculate_entity_recall(
 
 
 def evaluate_render_success_rate(raw_json_outputs: Sequence[str]) -> float:
-    """Measure static JSON validation success rate across a batch of LLM outputs."""
+    """Share of mind map JSON outputs that parse and satisfy every structural rule."""
     if not raw_json_outputs:
         return 0.0
 
     valid_count = 0
     for raw_output in raw_json_outputs:
         try:
-            validate_and_parse_mind_map_json(raw_output)
-            valid_count += 1
-        except LLMOutputValidationError:
+            graph = MindMapGraph.model_validate_json(raw_output)
+        except ValidationError:
             continue
+        if not validate_mind_map_graph(graph):
+            valid_count += 1
 
     return round(valid_count / len(raw_json_outputs), 4)
-

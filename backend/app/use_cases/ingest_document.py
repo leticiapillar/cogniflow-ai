@@ -48,10 +48,28 @@ class IngestDocumentUseCase:
             max_size_bytes=self._settings.max_pdf_size_bytes,
         )
 
+        sha256 = hashlib.sha256(file_bytes).hexdigest()
+        existing = await self._repository.get_document_by_name(safe_filename)
+        if (
+            existing is not None
+            and existing.sha256 == sha256
+            and existing.embedding_model == self._embedding_provider.model_name
+            and existing.embedding_dimension == self._embedding_provider.dimension
+        ):
+            stored = await self._repository.get_chunks_by_document(existing.id)
+            logger.info("'%s' is unchanged; reusing its chunks and mind map.", safe_filename)
+            return DocumentUploadResponse(
+                document_id=existing.id,
+                document_name=existing.name,
+                page_count=existing.page_count,
+                total_chunks=len(stored),
+                message="Document already ingested; reusing stored chunks.",
+            )
+
         result = await self._orchestrator.process_pdf_bytes(file_bytes)
         document, stored_chunks = await self._repository.replace_document(
             name=safe_filename,
-            sha256=hashlib.sha256(file_bytes).hexdigest(),
+            sha256=sha256,
             page_count=result.page_count,
             embedding_model=self._embedding_provider.model_name,
             embedding_dimension=self._embedding_provider.dimension,
