@@ -8,7 +8,7 @@ import { useIngestDocument } from "./use-ingest-document";
 vi.mock("../services/ingest-document", () => ({ ingestDocument: vi.fn() }));
 
 const ingest = vi.mocked(ingestDocument);
-const document = { document_name: "canonical.pdf", total_chunks: 2, message: "Ingested." };
+const document = { document_id: "8b6f2a51-3c0e-4f43-9a7d-5d2c1f0e9a11", page_count: 1, document_name: "canonical.pdf", total_chunks: 2, message: "Ingested." };
 const pdf = (name = "material.pdf") => new File(["%PDF"], name, { type: "application/pdf" });
 
 function deferred() {

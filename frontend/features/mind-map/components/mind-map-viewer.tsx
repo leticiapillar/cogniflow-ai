@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -10,16 +10,18 @@ import {
   type OnSelectionChangeParams,
   type AriaLabelConfig,
 } from "@xyflow/react";
-import type { ConceptFlowEdge, ConceptFlowNode } from "../flow-types";
-import type { GenerateMapResponse } from "../types";
+import type { TopicExpansion } from "../expansion";
+import type { ConceptFlowEdge, ConceptFlowNode, MindMapGraph } from "../flow-types";
+import type { MindMap, MindMapNode } from "../types";
 import { adaptMindMap } from "../utils/graph-adapter";
 import { layoutGraph } from "../utils/layout-graph";
+import { visibleNodeIds } from "../utils/tree";
 import { ConceptDetails } from "./concept-details";
 import { MindMapErrorBoundary } from "./mind-map-error-boundary";
-import { MindMapNode } from "./mind-map-node";
+import { MindMapNode as MindMapNodeView } from "./mind-map-node";
 import { MindMapToolbar } from "./mind-map-toolbar";
 
-const nodeTypes = { concept: MindMapNode };
+const nodeTypes = { concept: MindMapNodeView };
 const fitOptions = { padding: 0.2, minZoom: 0.05, maxZoom: 1, duration: 0 };
 
 const ariaLabelConfig: Partial<AriaLabelConfig> = {
@@ -39,12 +41,45 @@ const ariaLabelConfig: Partial<AriaLabelConfig> = {
   "handle.ariaLabel": "Ponto de conexão",
 };
 
-function MindMapCanvas({ map }: { map: GenerateMapResponse }) {
-  const [initialGraph] = useState(() => layoutGraph(adaptMindMap(map)));
-  const [nodes, setNodes, onNodesChange] = useNodesState<ConceptFlowNode>(initialGraph.nodes);
-  const [edges, , onEdgesChange] = useEdgesState<ConceptFlowEdge>(initialGraph.edges);
+function visibleLayout(graph: MindMapGraph, visible: ReadonlySet<string>, selectedId: string | null): MindMapGraph {
+  const laid = layoutGraph({
+    nodes: graph.nodes.filter((node) => visible.has(node.id)),
+    edges: graph.edges.filter((edge) => visible.has(edge.source) && visible.has(edge.target)),
+  });
+  return { ...laid, nodes: laid.nodes.map((node) => ({ ...node, selected: node.id === selectedId })) };
+}
+
+type CanvasProps = {
+  map: MindMap;
+  expansion: TopicExpansion;
+  onAskAbout?: (node: MindMapNode) => void;
+};
+
+function MindMapCanvas({ map, expansion, onAskAbout }: CanvasProps) {
+  const fullGraph = useMemo(() => adaptMindMap(map), [map]);
+  const visible = useMemo(() => visibleNodeIds(map, expansion.expanded), [map, expansion.expanded]);
+  const visibleKey = [...visible].sort().join("|");
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [initialGraph] = useState(() => visibleLayout(fullGraph, visible, null));
+  const [nodes, setNodes, onNodesChange] = useNodesState<ConceptFlowNode>(initialGraph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<ConceptFlowEdge>(initialGraph.edges);
+  const [layoutKey, setLayoutKey] = useState(visibleKey);
   const { fitView, zoomIn, zoomOut } = useReactFlow<ConceptFlowNode, ConceptFlowEdge>();
+
+  // Opening or closing an axis lays the visible tree out again (during render, so the
+  // canvas never shows nodes of a closed axis).
+  if (layoutKey !== visibleKey) {
+    const next = visibleLayout(fullGraph, visible, selectedId);
+    setLayoutKey(visibleKey);
+    setNodes(next.nodes);
+    setEdges(next.edges);
+  }
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => { void fitView(fitOptions); });
+    return () => cancelAnimationFrame(frame);
+  }, [layoutKey, fitView]);
 
   const onSelectionChange = useCallback(({ nodes: selected }: OnSelectionChangeParams<ConceptFlowNode>) => {
     setSelectedId(selected[0]?.id ?? null);
@@ -65,7 +100,7 @@ function MindMapCanvas({ map }: { map: GenerateMapResponse }) {
         onReorganize={reorganize}
       />
       <p id="map-instructions" className="rounded-lg bg-accent-soft/60 px-3 py-2 text-sm leading-relaxed text-muted">
-        Selecione um conceito para ler os detalhes. Arraste os conceitos para mudar suas posições ou o fundo para navegar pelo mapa.
+        Comece pelo Eixo 1. Use o botão Abrir de cada eixo para ver os conceitos dele. Selecione um conceito para ler os detalhes.
       </p>
       <div role="region" aria-label="Mapa mental interativo" aria-describedby="map-instructions" className="mind-map-canvas">
         <ReactFlow<ConceptFlowNode, ConceptFlowEdge>
@@ -92,16 +127,21 @@ function MindMapCanvas({ map }: { map: GenerateMapResponse }) {
           <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
         </ReactFlow>
       </div>
-      <ConceptDetails node={map.nodes.find((node) => node.id === selectedId)} map={map} />
+      <ConceptDetails
+        node={map.nodes.find((node) => node.id === selectedId)}
+        map={map}
+        expansion={expansion}
+        onAskAbout={onAskAbout}
+      />
     </div>
   );
 }
 
-export function MindMapViewer({ map, onShowList }: { map: GenerateMapResponse; onShowList?: () => void }) {
+export function MindMapViewer({ map, expansion, onShowList, onAskAbout }: CanvasProps & { onShowList?: () => void }) {
   return (
     <MindMapErrorBoundary key={JSON.stringify(map)} onShowList={onShowList}>
       <ReactFlowProvider>
-        <MindMapCanvas map={map} />
+        <MindMapCanvas map={map} expansion={expansion} onAskAbout={onAskAbout} />
       </ReactFlowProvider>
     </MindMapErrorBoundary>
   );

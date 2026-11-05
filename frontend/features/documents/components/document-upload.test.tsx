@@ -13,7 +13,7 @@ beforeEach(() => ingest.mockReset());
 afterEach(cleanup);
 
 it("enables upload after valid selection and announces completion", async () => {
-  const response = { document_name: "canonical.pdf", total_chunks: 2, message: "Ingested." };
+  const response = { document_id: "8b6f2a51-3c0e-4f43-9a7d-5d2c1f0e9a11", page_count: 1, document_name: "canonical.pdf", total_chunks: 2, message: "Ingested." };
   ingest.mockResolvedValue(response);
   const onChange = vi.fn();
 
@@ -23,7 +23,7 @@ it("enables upload after valid selection and announces completion", async () => 
   fireEvent.change(screen.getByLabelText("Arquivo PDF"), { target: { files: [file()] } });
   expect((screen.getByRole("button", { name: "Enviar PDF" }) as HTMLButtonElement).disabled).toBe(false);
   await act(async () => { fireEvent.submit(screen.getByRole("form")); });
-  expect(screen.getByRole("status").textContent).toContain("2 trechos disponíveis");
+  expect(screen.getByRole("status").textContent).toContain("1 página e 2 trechos");
   expect(onChange).toHaveBeenLastCalledWith(response);
 });
 
@@ -42,7 +42,7 @@ it("shows a validation error without submitting an invalid file", () => {
 
 it("keeps the selected file after a server error and allows retry", async () => {
   ingest.mockRejectedValueOnce(new ApiError("network", "Falha de conexão."))
-    .mockResolvedValueOnce({ document_name: "sample.pdf", total_chunks: 1, message: "Ingested." });
+    .mockResolvedValueOnce({ document_id: "8b6f2a51-3c0e-4f43-9a7d-5d2c1f0e9a11", page_count: 1, document_name: "sample.pdf", total_chunks: 1, message: "Ingested." });
 
   render(<DocumentUpload onDocumentChange={vi.fn()} />);
 
@@ -54,5 +54,12 @@ it("keeps the selected file after a server error and allows retry", async () => 
   await act(async () => { fireEvent.submit(screen.getByRole("form")); });
 
   expect(screen.queryByRole("alert")).toBeNull();
-  expect(screen.getByRole("status").textContent).toContain("1 trecho disponível");
+  expect(screen.getByRole("status").textContent).toContain("1 página e 1 trecho");
+});
+
+it("keeps the upload disabled while the AI service is not ready", () => {
+  render(<DocumentUpload onDocumentChange={vi.fn()} disabled />);
+
+  expect((screen.getByLabelText("Arquivo PDF") as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Enviar PDF" }) as HTMLButtonElement).disabled).toBe(true);
 });

@@ -28,6 +28,9 @@ export async function ingestDocument(
       if (error.status === 422) {
         throw new ApiError("http", "Não foi possível ler esse PDF. Confira se ele contém texto selecionável e tem até 20 MiB.", 422);
       }
+      if (error.status === 503) {
+        throw new ApiError("http", "O serviço de IA está indisponível. Tente enviar o PDF novamente em instantes.", 503);
+      }
     }
 
     throw error;

@@ -3,9 +3,17 @@ import { createMapResponse } from "../test-fixtures";
 import { adaptMindMap } from "./graph-adapter";
 import { layoutGraph } from "./layout-graph";
 
+/** Theme and one axis: the smallest tree, so each test controls every node. */
+function smallMap() {
+  const map = createMapResponse();
+  map.nodes = map.nodes.slice(0, 2);
+  map.edges = [map.edges[0]];
+  return map;
+}
+
 describe("layoutGraph", () => {
   it("places children below parents with space between their bounding boxes", () => {
-    const graph = layoutGraph(adaptMindMap(createMapResponse()));
+    const graph = layoutGraph(adaptMindMap(smallMap()));
     const [parent, child] = graph.nodes;
 
     expect(child.position.y).toBeGreaterThan(parent.position.y + parent.height!);
@@ -15,8 +23,8 @@ describe("layoutGraph", () => {
   });
 
   it("keeps sibling nodes from overlapping and preserves all connections", () => {
-    const map = createMapResponse();
-    map.nodes.push({ ...map.nodes[1], id: "water", data: { label: "Água" } });
+    const map = smallMap();
+    map.nodes.push({ ...map.nodes[1], id: "water", data: { ...map.nodes[1].data, label: "Água" } });
     map.edges.push({ ...map.edges[0], id: "root-water", target: "water" });
     const input = adaptMindMap(map);
     const graph = layoutGraph(input);
@@ -27,7 +35,7 @@ describe("layoutGraph", () => {
   });
 
   it("does not mutate the input and restores manual positions deterministically", () => {
-    const input = adaptMindMap(createMapResponse());
+    const input = adaptMindMap(smallMap());
     const before = structuredClone(input);
     const first = layoutGraph(input);
 
@@ -39,10 +47,10 @@ describe("layoutGraph", () => {
   });
 
   it("supports disconnected nodes, cycles and multiple relationships between the same concepts", () => {
-    const map = createMapResponse();
-    map.nodes.push({ ...map.nodes[1], id: "isolated", data: { label: "Isolado" } });
+    const map = smallMap();
+    map.nodes.push({ ...map.nodes[1], id: "isolated", data: { ...map.nodes[1].data, label: "Isolado" } });
     map.edges.push({ ...map.edges[0], id: "second-relation", label: "outra relação" });
-    map.edges.push({ ...map.edges[0], id: "return", source: "chlorophyll", target: "root" });
+    map.edges.push({ ...map.edges[0], id: "return", source: "topic-1", target: "root" });
 
     const graph = layoutGraph(adaptMindMap(map));
 
@@ -52,8 +60,8 @@ describe("layoutGraph", () => {
   });
 
   it("does not retain nodes from previous layout calculations", () => {
-    layoutGraph(adaptMindMap(createMapResponse()));
-    const map = createMapResponse();
+    layoutGraph(adaptMindMap(smallMap()));
+    const map = smallMap();
     map.nodes = [map.nodes[0]];
     map.edges = [];
 
@@ -65,5 +73,32 @@ describe("layoutGraph", () => {
 
   it("handles an empty graph without producing invalid coordinates", () => {
     expect(layoutGraph({ nodes: [], edges: [] })).toEqual({ nodes: [], edges: [] });
+  });
+});
+
+describe("layoutGraph for mind map trees", () => {
+  it("places the study axes left to right in their numbered order, whatever the API order", () => {
+    const map = createMapResponse();
+    map.nodes.reverse();
+    map.edges.reverse();
+
+    const graph = layoutGraph(adaptMindMap(map));
+    const x = (id: string) => graph.nodes.find((node) => node.id === id)!.position.x;
+    const y = (id: string) => graph.nodes.find((node) => node.id === id)!.position.y;
+
+    expect(x("topic-1")).toBeLessThan(x("topic-2"));
+    expect(y("topic-1")).toBe(y("topic-2"));
+    expect(y("chlorophyll")).toBeGreaterThan(y("topic-1"));
+    expect(y("leaf")).toBeGreaterThan(y("chlorophyll"));
+  });
+
+  it("centers each parent over its children without overlapping subtrees", () => {
+    const graph = layoutGraph(adaptMindMap(createMapResponse()));
+    const node = (id: string) => graph.nodes.find((item) => item.id === id)!;
+    const center = (id: string) => node(id).position.x + node(id).width! / 2;
+
+    expect(center("topic-1")).toBeCloseTo(center("chlorophyll"));
+    expect(node("topic-2").position.x).toBeGreaterThanOrEqual(node("topic-1").position.x + node("topic-1").width!);
+    expect(center("root")).toBeCloseTo((center("topic-1") + center("topic-2")) / 2);
   });
 });

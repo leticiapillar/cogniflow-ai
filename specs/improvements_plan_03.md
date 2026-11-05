@@ -136,14 +136,14 @@ Aplicado a todo texto gerado (mapa e respostas do tutor):
 - [x] Escrever os prompts em **português** e com exemplos curtos de entrada/saída (*few-shot*) — modelos de 3B seguem melhor instruções no idioma do conteúdo e com exemplos concretos.
 
 ## Etapa 6: Frontend do Tutor (`frontend/features/`)
-- [ ] **Fluxo:** upload do PDF → indicador de progresso da geração do mapa (polling do `status`/`progress`, com mensagem previsível de etapa) → mapa pronto → tira-dúvidas habilitado.
-- [ ] **Prontidão do serviço:** consultar `GET /api/health` ao carregar a página; com `status: "degraded"`, desabilitar o upload e exibir *"O serviço de IA está iniciando ou indisponível."* com botão para verificar novamente.
-- [ ] **Mapa parcial:** com `status: "partial"`, exibir aviso discreto e literal listando as seções não processadas, cada uma com a ação **"Tentar de novo"**; com `failed`, mensagem clara e ação **"Gerar novamente"**.
-- [ ] Remover o formulário de tema (`MindMapForm`) e o seletor de abrangência (`COVERAGE_OPTIONS`) da geração do mapa.
-- [ ] **Exibição progressiva** no `MindMapViewer` e no `MindMapOutline`: abrir com `root` + eixos numerados; expandir/recolher eixos por clique e teclado (`Enter`/`Espaço`), preservando o estado ao alternar Mapa ↔ Lista.
-- [ ] Nova feature `frontend/features/tutor/`: painel de perguntas com histórico da sessão, resposta no formato estruturado (resposta → tópicos → exemplo → termos), citações com página e campo de pergunta com limite de caracteres e foco gerenciado.
-- [ ] No `ConceptDetails`, adicionar a ação **"Tirar dúvida sobre este conceito"**, que abre o tutor com `node_id` preenchido.
-- [ ] Atualizar schemas Zod, tipos e testes (Vitest) e os fluxos E2E com axe-core (Playwright).
+- [x] **Fluxo:** upload do PDF → indicador de progresso da geração do mapa (polling do `status`/`progress`, com mensagem previsível de etapa) → mapa pronto → tira-dúvidas habilitado.
+- [x] **Prontidão do serviço:** consultar `GET /api/health` ao carregar a página; com `status: "degraded"`, desabilitar o upload e exibir *"O serviço de IA está iniciando ou indisponível."* com botão para verificar novamente.
+- [x] **Mapa parcial:** com `status: "partial"`, exibir aviso discreto e literal listando as seções não processadas, cada uma com a ação **"Tentar de novo"**; com `failed`, mensagem clara e ação **"Gerar novamente"**.
+- [x] Remover o formulário de tema (`MindMapForm`) e o seletor de abrangência (`COVERAGE_OPTIONS`) da geração do mapa.
+- [x] **Exibição progressiva** no `MindMapViewer` e no `MindMapOutline`: abrir com `root` + eixos numerados; expandir/recolher eixos por clique e teclado (`Enter`/`Espaço`), preservando o estado ao alternar Mapa ↔ Lista.
+- [x] Nova feature `frontend/features/tutor/`: painel de perguntas com histórico da sessão, resposta no formato estruturado (resposta → tópicos → exemplo → termos), citações com página e campo de pergunta com limite de caracteres e foco gerenciado.
+- [x] No `ConceptDetails`, adicionar a ação **"Tirar dúvida sobre este conceito"**, que abre o tutor com `node_id` preenchido.
+- [x] Atualizar schemas Zod, tipos e testes (Vitest) e os fluxos E2E com axe-core (Playwright).
 
 ## Etapa 7: Validação, Avaliação e Documentação
 - [ ] **Separar testes de fluxo e avaliação de qualidade:**

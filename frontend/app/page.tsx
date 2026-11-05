@@ -19,7 +19,7 @@ export default function HomePage() {
           </span>
           <div>
             <p className="font-bold tracking-tight">CogniFlow AI</p>
-            <p className="text-sm text-muted">Seu espaço de aprendizagem visual</p>
+            <p className="text-sm text-muted">Tutor de aula com mapa mental</p>
           </div>
           </div>
           <span className="hidden items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1.5 text-xs font-semibold text-muted sm:flex">
@@ -37,14 +37,14 @@ export default function HomePage() {
         <div className="mb-10 grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="max-w-3xl space-y-4">
           <p className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1.5 text-xs font-bold uppercase tracking-[0.14em] text-accent">
-            <span aria-hidden="true">✦</span> Aprendizagem visual com IA
+            <span aria-hidden="true">✦</span> Tutor de aula com IA
           </p>
           <h1 className="text-4xl font-bold leading-[1.05] tracking-[-0.04em] sm:text-5xl lg:text-6xl">
-            Transforme conteúdo em <span className="text-accent">conexões.</span>
+            Estude a aula por <span className="text-accent">partes.</span>
           </h1>
           <p className="max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-            Envie seu material, faça uma pergunta e explore os conceitos em um
-            mapa mental interativo — com tudo conectado ao seu documento.
+            Envie o PDF da aula. O CogniFlow monta um mapa mental do material inteiro,
+            organizado em eixos de estudo, e responde às suas dúvidas usando apenas o conteúdo da aula.
           </p>
           </div>
           <div className="dot-grid hidden rounded-2xl border border-border bg-surface/70 p-5 lg:block">
@@ -52,9 +52,9 @@ export default function HomePage() {
             <div className="mt-4 flex items-center gap-2 text-sm font-semibold">
               <span className="rounded-lg bg-accent-soft px-3 py-2 text-accent">PDF</span>
               <span aria-hidden="true" className="text-muted">→</span>
-              <span className="rounded-lg bg-orange-50 px-3 py-2 text-[#c94627]">Tema</span>
-              <span aria-hidden="true" className="text-muted">→</span>
               <span className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">Mapa</span>
+              <span aria-hidden="true" className="text-muted">→</span>
+              <span className="rounded-lg bg-orange-50 px-3 py-2 text-[#c94627]">Dúvidas</span>
             </div>
           </div>
         </div>

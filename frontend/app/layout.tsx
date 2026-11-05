@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CogniFlow AI | Aprendizagem visual",
+  title: "CogniFlow AI | Tutor de aula",
   description:
-    "Transforme materiais de estudo em mapas mentais e explore conexões entre conceitos.",
+    "Tutor de aula para alunos neurodivergentes: mapa mental do PDF da aula e respostas às dúvidas com base no material.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

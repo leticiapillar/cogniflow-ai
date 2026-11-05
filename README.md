@@ -177,9 +177,11 @@ O frontend estará disponível em:
 - **Aplicação Web**: http://localhost:3000
 
 Na interface:
-1. Envie um arquivo PDF (ex.: `Proposta_Projeto_CogniFlow_AI.pdf` ou `fotossintese-texto-selecionavel.pdf`).
-2. Informe o tema ou dúvida de estudo e escolha a **Abrangência do mapa** (**Essencial — 5 trechos**, **Detalhada — 10 trechos**, **Ampla — 15 trechos** ou **Completa — 20 trechos**).
-3. Explore os conceitos no **Mapa** visual (com código de cores para *Tema central*, *Eixo temático*, *Conceito* e *Exemplo prático*) ou selecione **Lista** para leitura linear estruturada. A alternância preserva posições, zoom e seleção do mapa.
+1. Aguarde a verificação do serviço de IA: enquanto o Ollama não estiver pronto, o envio de PDF fica desabilitado e há um botão **Verificar novamente**.
+2. Envie o PDF da aula (ex.: `fotossintese-texto-selecionavel.pdf`). O mapa é montado em segundo plano, com o progresso exibido em três etapas fixas (*ler cada seção*, *juntar conceitos repetidos*, *organizar os eixos de estudo*).
+3. Explore o mapa: ele abre com o **Tema central** e os **Eixos de estudo numerados**; use **Abrir** em cada eixo para ver seus conceitos e exemplos. A visualização **Lista** oferece a mesma leitura progressiva, acessível por teclado e leitor de tela, e a alternância preserva posições, zoom, seleção e eixos abertos.
+4. Tire dúvidas no painel **Suas dúvidas** (habilitado quando o mapa fica pronto) ou pelo botão **Tirar dúvida sobre este conceito**. A resposta segue sempre a mesma estrutura e cita as páginas do PDF.
+5. Se o mapa ficar parcial, cada seção não processada tem um botão **Tentar de novo**.
 
 Detalhes da arquitetura de componentes e fluxo de dados estão em [docs/arquitetura-frontend.md](docs/arquitetura-frontend.md).
 

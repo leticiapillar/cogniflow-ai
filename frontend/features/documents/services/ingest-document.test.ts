@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_PDF_SIZE_BYTES } from "../schemas";
 import { ingestDocument } from "./ingest-document";
 
-const response = { document_name: "material_academico.pdf", total_chunks: 3, message: "Successfully ingested." };
+const response = { document_id: "8b6f2a51-3c0e-4f43-9a7d-5d2c1f0e9a11", page_count: 1, document_name: "material_academico.pdf", total_chunks: 3, message: "Successfully ingested." };
 const pdf = () => new File(["%PDF-1.4 sample"], "material acadêmico.pdf", { type: "application/pdf" });
 
 beforeEach(() => vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "http://localhost:8000"));
@@ -67,7 +67,7 @@ describe("ingestDocument", () => {
     { ...response, total_chunks: -1 },
     { ...response, total_chunks: 1.5 },
     { ...response, total_chunks: "3" },
-    { document_name: response.document_name, total_chunks: 3 },
+    { document_id: "8b6f2a51-3c0e-4f43-9a7d-5d2c1f0e9a11", page_count: 1, document_name: response.document_name, total_chunks: 3 },
   ])("rejects a response that violates the document contract", async (body) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(body)));
 
@@ -87,5 +87,25 @@ describe("ingestDocument", () => {
 
     expect(error).toMatchObject({ kind: "http", status });
     expect(error.message).not.toContain("sensitive");
+  });
+});
+
+describe("ingestDocument service availability", () => {
+  it("explains an unavailable AI service without exposing the server detail", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ detail: "Ollama embedding model unavailable" }, { status: 503 })));
+
+    await expect(ingestDocument(pdf())).rejects.toMatchObject({
+      kind: "http",
+      status: 503,
+      message: "O serviço de IA está indisponível. Tente enviar o PDF novamente em instantes.",
+    });
+  });
+
+  it("rejects a response without the document identifier used by the map and the tutor", async () => {
+    const withoutId: Partial<typeof response> = { ...response };
+    delete withoutId.document_id;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(withoutId)));
+
+    await expect(ingestDocument(pdf())).rejects.toMatchObject({ kind: "invalid-response" });
   });
 });

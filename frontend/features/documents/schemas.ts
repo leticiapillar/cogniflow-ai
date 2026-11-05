@@ -12,7 +12,9 @@ export const pdfFileSchema = z.instanceof(File, { error: "Selecione um arquivo P
   );
 
 export const documentUploadResponseSchema = z.object({
+  document_id: z.uuid(),
   document_name: z.string().trim().min(1),
+  page_count: z.number().int().positive(),
   total_chunks: z.number().int().nonnegative(),
   message: z.string(),
 });

@@ -2,8 +2,10 @@ import { useEffect, useRef } from "react";
 import { useIngestDocument } from "../hooks/use-ingest-document";
 import type { DocumentUploadResponse } from "../types";
 
-export function DocumentUpload({ onDocumentChange }: {
+export function DocumentUpload({ onDocumentChange, disabled = false }: {
   onDocumentChange: (document: DocumentUploadResponse | null) => void;
+  /** True while the AI service is not ready. */
+  disabled?: boolean;
 }) {
   const { selectedFile, state, selectFile, upload, cancel } = useIngestDocument(onDocumentChange);
   const errorMessage = useRef<HTMLParagraphElement>(null);
@@ -44,6 +46,7 @@ export function DocumentUpload({ onDocumentChange }: {
             id="document-file"
             type="file"
             accept=".pdf,application/pdf"
+            disabled={disabled && !isUploading}
             onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
             aria-invalid={isInvalidFile}
             aria-describedby={`document-help document-status${state.status === "error" ? " document-error" : ""}`}
@@ -61,7 +64,7 @@ export function DocumentUpload({ onDocumentChange }: {
           <button
             type="submit"
             aria-busy={isUploading}
-            disabled={!selectedFile || isUploading || isInvalidFile || state.status === "success"}
+            disabled={disabled || !selectedFile || isUploading || isInvalidFile || state.status === "success"}
             className="primary-button flex-1 rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-border disabled:text-muted disabled:shadow-none"
           >
             {isUploading ? "Enviando PDF…" : state.status === "error" && !isInvalidFile ? "Tentar novamente" : "Enviar PDF"}
@@ -78,7 +81,7 @@ export function DocumentUpload({ onDocumentChange }: {
           {isUploading
             ? "Enviando e preparando o material. Você pode cancelar ou selecionar outro arquivo."
             : state.status === "success"
-              ? `PDF preparado: ${state.document.total_chunks} ${state.document.total_chunks === 1 ? "trecho disponível" : "trechos disponíveis"}. Selecione outro arquivo para substituir o material.`
+              ? `PDF preparado: ${state.document.page_count} ${state.document.page_count === 1 ? "página" : "páginas"} e ${state.document.total_chunks} ${state.document.total_chunks === 1 ? "trecho" : "trechos"}. Selecione outro arquivo para substituir o material.`
               : selectedFile ? `Arquivo selecionado: ${selectedFile.name}.` : "Selecione um PDF para começar."}
         </p>
       </form>
