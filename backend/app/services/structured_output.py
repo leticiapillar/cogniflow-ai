@@ -29,7 +29,12 @@ def inline_json_schema(model: type[BaseModel]) -> dict[str, Any]:
         if isinstance(node, dict):
             if "$ref" in node:
                 return resolve(definitions[node["$ref"].split("/")[-1]])
-            return {key: resolve(value) for key, value in node.items() if key != "title"}
+            # Drop Pydantic's "title" annotations (strings), never a field named "title".
+            return {
+                key: resolve(value)
+                for key, value in node.items()
+                if not (key == "title" and isinstance(value, str))
+            }
         if isinstance(node, list):
             return [resolve(item) for item in node]
         return node

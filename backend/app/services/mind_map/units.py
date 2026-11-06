@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import re
 from typing import Protocol, Sequence
 
 from app.services.text_processing import prepare_chunk_text
@@ -8,6 +9,12 @@ UNIT_MAX_CHARS = 6000
 # Adjacent small sections are merged up to this size to save LLM calls
 # without overloading a small model with too much text at once.
 UNIT_MERGE_TARGET_CHARS = 3000
+
+# Reference lists are not study content: left out of the map (the tutor can still cite them).
+NON_STUDY_SECTION = re.compile(
+    r"^\s*(bibliografia|refer[êe]ncias( bibliogr[áa]ficas)?|fontes( consultadas)?|webgrafia|cr[ée]ditos)\b",
+    re.IGNORECASE,
+)
 
 
 class ChunkLike(Protocol):
@@ -47,7 +54,11 @@ def _group_by_section(chunks: Sequence[ChunkLike]) -> list[tuple[str | None, lis
                 sections[-1][1].append((chunk.chunk_index, text))
             continue
         sections.append((chunk.section_title, [(chunk.chunk_index, text)] if text else []))
-    return [(title, items) for title, items in sections if items]
+    return [
+        (title, items)
+        for title, items in sections
+        if items and not (title and NON_STUDY_SECTION.match(title))
+    ]
 
 
 def _split_large_section(items: list[tuple[int, str]], max_chars: int) -> list[list[tuple[int, str]]]:

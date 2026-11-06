@@ -68,16 +68,18 @@ class Settings(BaseSettings):
     ollama_embedding_model: str = Field(
         default="bge-m3", alias="OLLAMA_EMBEDDING_MODEL"
     )
-    ollama_llm_model: str = Field(default="llama3.2:3b", alias="OLLAMA_LLM_MODEL")
+    # qwen2.5:3b won the plan 03 evaluation (docs/avaliacao-modelos.md).
+    ollama_llm_model: str = Field(default="qwen2.5:3b", alias="OLLAMA_LLM_MODEL")
     ollama_num_ctx: int = Field(default=8192, gt=0, alias="OLLAMA_NUM_CTX")
     ollama_num_predict: int = Field(default=2048, gt=0, alias="OLLAMA_NUM_PREDICT")
 
     tutor_top_k: int = Field(default=5, ge=1, le=20, alias="TUTOR_TOP_K")
     # Below this cosine similarity the best chunk is considered unrelated to the question
-    # and the tutor answers "not found" without calling the LLM. Initial value for bge-m3,
-    # to be calibrated with the evaluation suite (plan 03, Etapa 7).
+    # and the tutor answers "not found" without calling the LLM. Calibrated for bge-m3
+    # (docs/avaliacao-modelos.md): 0.15 below the least similar answerable question, so
+    # it only filters clearly off-topic questions and never blocks a valid one.
     tutor_min_similarity: float = Field(
-        default=0.45, ge=-1.0, le=1.0, alias="TUTOR_MIN_SIMILARITY"
+        default=0.47, ge=-1.0, le=1.0, alias="TUTOR_MIN_SIMILARITY"
     )
     # A 3B model on CPU can take minutes per answer; this bounds a single request.
     ollama_llm_timeout_seconds: float = Field(

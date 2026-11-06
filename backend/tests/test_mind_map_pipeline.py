@@ -63,6 +63,20 @@ def test_units_merge_small_sections_and_split_large_ones() -> None:
     assert [u.index for u in units] == [0, 1, 2]
 
 
+def test_units_leave_reference_sections_out_of_the_map() -> None:
+    """Found by the real-model evaluation: the model turned the bibliography into concepts."""
+    chunks = [
+        Chunk(0, "A fotossíntese produz glicose nas folhas.", "Importância da fotossíntese"),
+        Chunk(1, "Toda Biologia, disponível em http://www.todabiologia.com.", "BIBLIOGRAFIA"),
+        Chunk(2, "Livro didático BIO, volume 1, editora Saraiva.", "Referências bibliográficas"),
+        Chunk(3, "Imagens e vídeos de apoio da aula.", "Fontes consultadas"),
+    ]
+
+    units = build_map_units(chunks)
+
+    assert [u.chunk_indices for u in units] == [[0]]
+
+
 # ---- Map -----------------------------------------------------------------------------------
 
 
@@ -143,7 +157,7 @@ async def test_organize_retries_when_axis_count_is_wrong() -> None:
     organization = await pipeline(llm).organize(concepts)
 
     assert len(organization.axes) == 3
-    assert "crie de 3 a 5 eixos" in llm.prompts[1]
+    assert "crie de 2 a 5 eixos" in llm.prompts[1]  # 4 concepts: at least 2 axes
 
 
 async def test_organize_rejects_unknown_and_repeated_concepts() -> None:
@@ -154,6 +168,70 @@ async def test_organize_rejects_unknown_and_repeated_concepts() -> None:
     with pytest.raises(StructuredOutputError) as error:
         await pipeline(llm).organize(concepts)
     assert "c9" in str(error.value) and "título é igual" in str(error.value)
+
+
+async def test_organize_normalizes_repeated_concepts_and_empty_axes() -> None:
+    """Found by the real-model evaluation: rejecting repetitions made most maps fail."""
+    concepts = [Concept(id=f"c{i}", label=f"Conceito {i}", summary="Resumo.", source_chunks=[i]) for i in range(1, 7)]
+    repeated = {"topic": "Tema", "synthesis": "Frase.", "axes": [
+        {"title": "Parte A", "summary": "x", "concepts": [{"id": "c1", "relation": "has_part"}, {"id": "c2", "relation": "has_part"}]},
+        {"title": "Parte B", "summary": "x", "concepts": [{"id": "c1", "relation": "causes"}, {"id": "c3", "relation": "has_part"}]},
+        {"title": "Parte C", "summary": "x", "concepts": [{"id": "c2", "relation": "has_part"}]},
+        {"title": "Parte D", "summary": "x", "concepts": [{"id": "c4", "relation": "has_part"}]},
+    ]}
+    llm = ScriptedLLMProvider([json.dumps(repeated)])
+
+    organization = await pipeline(llm).organize(concepts)
+
+    assert [[item.id for item in axis.concepts] for axis in organization.axes] == [["c1", "c2"], ["c3"], ["c4"]]
+    assert len(llm.prompts) == 1  # no correction needed
+
+
+async def test_short_documents_need_fewer_axes() -> None:
+    concepts = [Concept(id=f"c{i}", label=f"Conceito {i}", summary="Resumo.", source_chunks=[i]) for i in range(1, 5)]
+    two_axes = {"topic": "Tema", "synthesis": "Frase.", "axes": [
+        {"title": "Parte A", "summary": "x", "concepts": [{"id": "c1", "relation": "has_part"}, {"id": "c2", "relation": "has_part"}]},
+        {"title": "Parte B", "summary": "x", "concepts": [{"id": "c3", "relation": "has_part"}, {"id": "c4", "relation": "has_part"}]},
+    ]}
+    llm = ScriptedLLMProvider([json.dumps(two_axes)])
+
+    organization = await pipeline(llm).organize(concepts)
+
+    assert len(organization.axes) == 2
+
+
+async def test_concepts_left_out_by_the_model_go_to_the_closest_axis_with_room() -> None:
+    """Found by the real-model evaluation: core concepts (Cloroplasto, Clorofila) were dropped."""
+    concepts = [
+        Concept(id="c1", label="Fase clara", summary="Usa luz.", source_chunks=[1]),
+        Concept(id="c2", label="Clorofila", summary="Pigmento verde que absorve luz.", source_chunks=[2]),
+        Concept(id="c3", label="Ciclo de Calvin", summary="Produz glicose.", source_chunks=[3]),
+    ]
+    organization = MapOrganization.model_validate({
+        "topic": "Fotossíntese", "synthesis": "Frase.",
+        "axes": [
+            {"title": "Pigmento verde", "summary": "Pigmento verde que absorve luz.", "concepts": [{"id": "c1", "relation": "has_part"}]},
+            {"title": "Etapas", "summary": "Produz glicose.", "concepts": [{"id": "c3", "relation": "has_part"}]},
+        ],
+    })
+
+    placed = await pipeline().place_left_out(organization, concepts)
+
+    assert [item.id for item in placed.axes[0].concepts] == ["c1", "c2"]
+    assert [item.id for item in placed.axes[1].concepts] == ["c3"]
+    assert placed.axes[0].concepts[1].relation == "has_part"
+
+
+async def test_left_out_concepts_respect_the_axis_limit() -> None:
+    concepts = [Concept(id=f"c{i}", label=f"Conceito {i}", summary="Resumo.", source_chunks=[i]) for i in range(1, 8)]
+    organization = MapOrganization.model_validate({
+        "topic": "Tema", "synthesis": "Frase.",
+        "axes": [{"title": "Único", "summary": "x", "concepts": [{"id": "c1", "relation": "has_part"}]}],
+    })
+
+    placed = await pipeline().place_left_out(organization, concepts)
+
+    assert len(placed.axes[0].concepts) == 5  # MAX_CONCEPTS_PER_TOPIC; the rest stays out
 
 
 def test_compile_builds_a_valid_tree_with_fixed_relation_verbs() -> None:
@@ -273,3 +351,18 @@ async def test_ollama_llm_provider_fails_fast_on_client_errors() -> None:
     with pytest.raises(LLMProviderError, match="HTTP 404"):
         await provider.generate_json("s", "u", {})
     assert attempts == 1
+
+
+def test_inline_json_schema_keeps_fields_named_title() -> None:
+    """Regression: annotation titles are dropped, but the axis field `title` must stay.
+
+    Without it, Ollama's grammar never produced axis titles and every map failed
+    (found by the real-model evaluation, plan 03 Etapa 7).
+    """
+    schema = inline_json_schema(MapOrganization)
+    axis = schema["properties"]["axes"]["items"]
+
+    assert "title" in axis["properties"]
+    assert axis["properties"]["title"]["type"] == "string"
+    assert "title" in axis["required"]
+    assert "title" not in schema  # the model-level annotation is still removed

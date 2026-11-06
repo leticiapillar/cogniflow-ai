@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import re
 from typing import Sequence
+import unicodedata
 
 from pydantic import ValidationError
 
@@ -45,6 +46,17 @@ def extract_reference_entities(academic_text: str) -> list[str]:
     return entities
 
 
+def _fold(text: str) -> str:
+    """Lowercase without accents: 'Gás carbônico' matches 'gas carbonico'."""
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def _token_variants(token: str) -> tuple[str, ...]:
+    """The token and its singular form ('cloroplastos' -> 'cloroplasto')."""
+    return (token, token[:-1]) if token.endswith("s") and len(token) > 4 else (token,)
+
+
 def calculate_entity_recall(
     expected_entities: Sequence[str],
     mind_map: MindMapGraph,
@@ -62,22 +74,23 @@ def calculate_entity_recall(
     combined_nodes_text = " ".join(
         f"{node.data.label} {node.data.summary or ''}" for node in mind_map.nodes
     ).lower()
-    normalized_corpus = re.sub(r"\s+", " ", combined_nodes_text)
+    normalized_corpus = _fold(re.sub(r"\s+", " ", combined_nodes_text))
 
     matched: list[str] = []
     missing: list[str] = []
 
     for entity in cleaned_expected:
-        entity_lower = entity.lower()
+        entity_lower = _fold(entity)
         if entity_lower in normalized_corpus:
             matched.append(entity)
             continue
 
         significant_tokens = [
-            tok for tok in re.findall(r"[a-zA-ZÀ-ÿ0-9]{4,}", entity_lower)
+            tok for tok in re.findall(r"[a-z0-9]{4,}", entity_lower)
         ]
         if significant_tokens and all(
-            tok in normalized_corpus for tok in significant_tokens
+            any(variant in normalized_corpus for variant in _token_variants(tok))
+            for tok in significant_tokens
         ):
             matched.append(entity)
         else:

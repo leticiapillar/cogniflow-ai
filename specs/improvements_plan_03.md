@@ -20,6 +20,7 @@ A geração atual do mapa mental via RAG é incoerente com a tarefa: o mapa é u
 - **Público:** apenas alunos neurodivergentes (**TDAH** e **TEA**). O público surdo (Português L2) fica para uma versão futura — as regras de acessibilidade passam a ser organizadas em **perfis** para permitir adicioná-lo depois sem reescrever os prompts.
 - **Provedores:** apenas **Ollama**. O **Gemini** deixa de ser suportado nesta versão, mas as interfaces `BaseLLMProvider` e `BaseEmbeddingProvider` são mantidas para reintroduzi-lo no futuro.
 - **LLM:** `llama3.2:3b` como padrão (configurável). `qwen2.5:3b` será avaliado como alternativa na Etapa 7 (bom desempenho em JSON estruturado e multilíngue).
+  - **Atualização após a Etapa 7:** o `qwen2.5:3b` passou a ser o padrão — gerou 3/3 mapas (o `llama3.2:3b` gerou 1/3), acertou 15/15 perguntas do tutor e teve maior aderência ao perfil de acessibilidade. Detalhes em [docs/avaliacao-modelos.md](../docs/avaliacao-modelos.md).
 - **Embeddings:** `bge-m3` → **1024 dimensões** (o atual é 768), exige recriar a tabela de vetores.
 - **Estrutura do mapa:** árvore pura (sem ligações cruzadas entre ramos), 4 categorias atuais (`root`, `topic`, `concept`, `example`) e **exibição progressiva** (abre com tema + eixos; expande ao clicar). Menos estímulo visual e mais previsibilidade para TDAH/TEA.
 - **Sem substitutos determinísticos para a IA:** o provedor de embeddings por *hashing* e a geração de mapa por heurística (`ContextGroundedLocalLLMProvider`, `build_pedagogical_outline`) são **removidos da aplicação**. Quando a IA falha, a aplicação repete a tentativa e, se ainda falhar, **informa a falha de forma clara e previsível** em vez de entregar um resultado de qualidade inferior como se fosse da IA.
@@ -146,11 +147,18 @@ Aplicado a todo texto gerado (mapa e respostas do tutor):
 - [x] Atualizar schemas Zod, tipos e testes (Vitest) e os fluxos E2E com axe-core (Playwright).
 
 ## Etapa 7: Validação, Avaliação e Documentação
-- [ ] **Separar testes de fluxo e avaliação de qualidade:**
+- [x] **Separar testes de fluxo e avaliação de qualidade:**
   - **Testes rápidos** (`pytest`, padrão): provedores falsos em `backend/tests/fakes/` (`FakeEmbeddingProvider`, `FakeLLMProvider` com respostas fixas, incluindo respostas inválidas para exercitar repetição e `partial`) cobrindo map, reduce, deduplicação, validador, limiar do tutor e tratamento de falhas; **integração** com Testcontainers + pgvector em 1024 dimensões e HNSW. Esses testes verificam o encadeamento, **não** a qualidade pedagógica.
   - **Avaliação com IA real** (`pytest -m llm`, exige Ollama com os modelos baixados): suíte lenta e separada, executada antes de cada entrega.
-- [ ] Migrar o `test_academic_evaluation_suite.py` para a suíte `llm`. **Observação:** o recall médio de 100% registrado no `improvements_plan_02` foi medido com o provedor heurístico (configuração padrão `local`) sobre apostilas no formato `Conceito: explicação` — exatamente o padrão que a heurística extrai. A linha de base de qualidade precisa ser medida novamente com o LLM.
-- [ ] **Avaliação do mapa:** recall de entidades sobre o documento inteiro (`evaluation_metrics.py`), percentual de nós com `source_chunks` válidos, taxa de seções `partial` e conformidade com os limites de carga cognitiva.
-- [ ] **Avaliação do tutor:** conjunto de perguntas sobre `fotossintese-texto-selecionavel.pdf` — 10 respondíveis pelo material (citação correta) e 5 fora do material (devem retornar `found_in_material: false`).
-- [ ] **Comparativo de modelos 3B:** `llama3.2:3b` vs. `qwen2.5:3b` — taxa de JSON válido na primeira tentativa, recall, aderência ao perfil de acessibilidade e latência (tempo total do mapa e por resposta).
-- [ ] Atualizar o `README.md` e o `docs/arquitetura-frontend.md`: novo posicionamento (tutor para neurodivergentes), stack Ollama, migração de banco e reingestão dos PDFs.
+- [x] Migrar o `test_academic_evaluation_suite.py` para a suíte `llm`. **Observação:** o recall médio de 100% registrado no `improvements_plan_02` foi medido com o provedor heurístico (configuração padrão `local`) sobre apostilas no formato `Conceito: explicação` — exatamente o padrão que a heurística extrai. A linha de base de qualidade precisa ser medida novamente com o LLM.
+- [x] **Avaliação do mapa:** recall de entidades sobre o documento inteiro (`evaluation_metrics.py`), percentual de nós com `source_chunks` válidos, taxa de seções `partial` e conformidade com os limites de carga cognitiva.
+- [x] **Avaliação do tutor:** conjunto de perguntas sobre `fotossintese-texto-selecionavel.pdf` — 10 respondíveis pelo material (citação correta) e 5 fora do material (devem retornar `found_in_material: false`).
+- [x] **Comparativo de modelos 3B:** `llama3.2:3b` vs. `qwen2.5:3b` — taxa de JSON válido na primeira tentativa, recall, aderência ao perfil de acessibilidade e latência (tempo total do mapa e por resposta).
+- [x] Atualizar o `README.md` e o `docs/arquitetura-frontend.md`: novo posicionamento (tutor para neurodivergentes), stack Ollama, migração de banco e reingestão dos PDFs.
+
+### Resultado da Etapa 7
+
+- `qwen2.5:3b` adotado como LLM padrão: 3/3 mapas, recall 1,0 na aula de fotossíntese (4 de 4 execuções), 15/15 no tutor e aderência ao perfil de 0,97 (mapa) e 1,00 (tutor).
+- `TUTOR_MIN_SIMILARITY` calibrado em **0,47** (0,15 abaixo da pergunta respondível menos parecida): filtra perguntas de outros assuntos sem chamar o LLM e nunca bloqueia uma pergunta válida.
+- A avaliação encontrou e corrigiu seis defeitos invisíveis nos testes com LLM falso — o mais grave fazia **todos os mapas falharem** (o campo `title` dos eixos era removido do JSON Schema enviado ao Ollama). Os demais: calibração do limiar, bibliografia virando conceito, recall sensível a plural, conceitos centrais descartados na organização e rejeição excessiva da organização por um modelo de 3B.
+- Detalhes, limitações e próximos passos em [docs/avaliacao-modelos.md](../docs/avaliacao-modelos.md).

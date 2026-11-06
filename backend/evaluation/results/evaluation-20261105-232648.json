@@ -1,0 +1,1206 @@
+{
+  "generated_at": "2026-11-06T02:26:48.561456+00:00",
+  "embedding_model": "bge-m3",
+  "calibrated_threshold": 0.475,
+  "current_threshold": 0.47,
+  "summaries": [
+    {
+      "model": "llama3.2:3b",
+      "json_first_attempt_rate": 0.9090909090909091,
+      "json_first_attempt_by_task": {
+        "map_section": 1.0,
+        "organization": 0.6666666666666666,
+        "tutor_answer": 0.9333333333333333
+      },
+      "map": {
+        "documents": 3,
+        "ready": 3,
+        "partial": 0,
+        "failed": 0,
+        "section_failure_rate": 0.0,
+        "mean_recall": 0.3333333333333333,
+        "structural_errors": 0,
+        "mean_label_grounding": 0.6666666666666666,
+        "mean_seconds": 124.91710702200119,
+        "accessibility": {
+          "texts": 24,
+          "sentences": 26,
+          "short_sentence_rate": 0.9230769230769231,
+          "label_rate": 1.0,
+          "rhetorical_questions": 0,
+          "figurative_expressions": 0,
+          "adherence": 0.9166666666666666
+        }
+      },
+      "tutor": {
+        "questions": 15,
+        "errors": 0,
+        "llm_only": {
+          "accuracy": 0.9333333333333333,
+          "answered_correctly": 9,
+          "refused_correctly": 5
+        },
+        "with_current_threshold": {
+          "threshold": 0.47,
+          "accuracy": 0.9333333333333333,
+          "answered_correctly": 9,
+          "refused_correctly": 5
+        },
+        "with_calibrated_threshold": {
+          "threshold": 0.475,
+          "accuracy": 0.9333333333333333,
+          "answered_correctly": 9,
+          "refused_correctly": 5
+        },
+        "mean_seconds": 33.40782471926553,
+        "max_seconds": 92.92225718100235,
+        "accessibility": {
+          "texts": 35,
+          "sentences": 37,
+          "short_sentence_rate": 0.8918918918918919,
+          "label_rate": null,
+          "rhetorical_questions": 0,
+          "figurative_expressions": 0,
+          "adherence": 0.9142857142857143
+        }
+      }
+    },
+    {
+      "model": "qwen2.5:3b",
+      "json_first_attempt_rate": 0.9090909090909091,
+      "json_first_attempt_by_task": {
+        "map_section": 1.0,
+        "organization": 1.0,
+        "tutor_answer": 0.8666666666666667
+      },
+      "map": {
+        "documents": 3,
+        "ready": 3,
+        "partial": 0,
+        "failed": 0,
+        "section_failure_rate": 0.0,
+        "mean_recall": 0.6666666666666666,
+        "structural_errors": 0,
+        "mean_label_grounding": 0.782051282051282,
+        "mean_seconds": 93.40444143233132,
+        "accessibility": {
+          "texts": 32,
+          "sentences": 35,
+          "short_sentence_rate": 0.9714285714285714,
+          "label_rate": 1.0,
+          "rhetorical_questions": 0,
+          "figurative_expressions": 0,
+          "adherence": 0.96875
+        }
+      },
+      "tutor": {
+        "questions": 15,
+        "errors": 0,
+        "llm_only": {
+          "accuracy": 1.0,
+          "answered_correctly": 10,
+          "refused_correctly": 5
+        },
+        "with_current_threshold": {
+          "threshold": 0.47,
+          "accuracy": 1.0,
+          "answered_correctly": 10,
+          "refused_correctly": 5
+        },
+        "with_calibrated_threshold": {
+          "threshold": 0.475,
+          "accuracy": 1.0,
+          "answered_correctly": 10,
+          "refused_correctly": 5
+        },
+        "mean_seconds": 28.167935277666643,
+        "max_seconds": 95.36826079599996,
+        "accessibility": {
+          "texts": 32,
+          "sentences": 32,
+          "short_sentence_rate": 1.0,
+          "label_rate": null,
+          "rhetorical_questions": 0,
+          "figurative_expressions": 0,
+          "adherence": 1.0
+        }
+      }
+    }
+  ],
+  "details": {
+    "llama3.2:3b": {
+      "maps": [
+        {
+          "document": "fotossintese-texto-selecionavel.pdf",
+          "status": "ready",
+          "sections": 2,
+          "failed_sections": 0,
+          "seconds": 191.73834393900324,
+          "recall": 0.75,
+          "missing_entities": [
+            "Gás carbônico",
+            "Oxigênio"
+          ],
+          "nodes": 10,
+          "topics": 2,
+          "max_concepts_per_topic": 3,
+          "structural_errors": [],
+          "label_grounding_rate": 1.0,
+          "labels": [
+            "Energia e Produção",
+            "Fotossíntese",
+            "Glicose",
+            "Clorofila",
+            "Importância da fotossíntese",
+            "Cadeia alimentar",
+            "Processos de Produção",
+            "Plantas carnívoras",
+            "Alimentação complementar",
+            "Organismos que produzem energia"
+          ],
+          "error": null
+        },
+        {
+          "document": "01_cellular_biology.pdf",
+          "status": "ready",
+          "sections": 1,
+          "failed_sections": 0,
+          "seconds": 76.01206680299947,
+          "recall": 0.0,
+          "missing_entities": [
+            "Mitochondria",
+            "Chloroplasts",
+            "Ribosomes",
+            "Cell Membrane"
+          ],
+          "nodes": 7,
+          "topics": 2,
+          "max_concepts_per_topic": 3,
+          "structural_errors": [],
+          "label_grounding_rate": 0.5,
+          "labels": [
+            "Energia Quémica",
+            "Mitocôndria",
+            "Membrana Celular",
+            "Cloroplasto",
+            "Estruturas Celulares",
+            "Ribossomo",
+            "Processos Celulares"
+          ],
+          "error": null
+        },
+        {
+          "document": "02_thermodynamics.pdf",
+          "status": "ready",
+          "sections": 1,
+          "failed_sections": 0,
+          "seconds": 107.00091032400087,
+          "recall": 0.25,
+          "missing_entities": [
+            "First Law",
+            "Second Law",
+            "Entropy"
+          ],
+          "nodes": 7,
+          "topics": 2,
+          "max_concepts_per_topic": 3,
+          "structural_errors": [],
+          "label_grounding_rate": 0.5,
+          "labels": [
+            "Leis da Termodinâmica",
+            "Zeroth Law",
+            "Primeira Lei",
+            "Entropia",
+            "Definição e Fundamentos",
+            "Segunda Lei",
+            "Evolução dos Sistemas"
+          ],
+          "error": null
+        }
+      ],
+      "tutor": [
+        {
+          "question": "O que é a fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.7206064580967496,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 92.92225718100235,
+          "answer": "A fotossíntese, principal processo autotrófico, é realizada pelos seres que comportam clorofila (clorofilados), representados por plantas, alguns protistas, bactérias fotossintetizantes e cianobactérias. Com exceção das bactérias fotossintetizantes, os demais seres usam na fotossíntese o gás carbônico (CO2) e a água (H2O), formando carboidratos e gás oxigênio (O2), o qual é liberado para o meio.",
+          "key_points": [
+            "A fotossíntese é um processo autotrófico.",
+            "É realizado pelos seres com clorofila.",
+            "Usa gás carbônico e água como matéria-prima."
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quais seres realizam a fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.710322564436602,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 32.21795428099722,
+          "answer": "A fotossíntese é realizada pelos seres que comportam clorofila, representados por plantas, alguns protistas, bactérias fotossintetizantes e cianobactérias.",
+          "key_points": [
+            "Plantas",
+            "Protistas",
+            "Bactérias fotossintetizantes"
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quais substâncias a planta usa para fazer a fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.7096922320677933,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 19.091076862998307,
+          "answer": "A planta usa gás carbônico (CO2) e água (H2O) para fazer a fotossíntese.",
+          "key_points": [
+            "A clorofila absorve a luz do sol.",
+            "A clorofila é um pigmento verde."
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Qual gás é liberado na fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.6348498945891886,
+          "llm_found": true,
+          "page_ok": false,
+          "keywords_ok": true,
+          "seconds": 30.53024587099935,
+          "answer": "O gás oxigénio (O2) é liberado na fotossíntese.",
+          "key_points": [
+            "A fotossíntese libera gás oxigénio (O2) para o ar.",
+            "O oxigénio é um gás essencial para a respiração celular."
+          ],
+          "cited_pages": [
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "O que são os cloroplastos?",
+          "in_material": true,
+          "best_similarity": 0.7062369126912345,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 42.94773607100069,
+          "answer": "São organelas presentes nas células de vegetais e de outros organismos que realizam fotossíntese.",
+          "key_points": [
+            "São limitados por uma espécie de envelope formado por duas membranas lipoprotéicas.",
+            "Possuem DNA, RNA e ribossomos, apresentando a capacidade de realizar o processo de sintetização de proteínas, além de multiplicarem-se."
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Por que os cloroplastos são verdes?",
+          "in_material": true,
+          "best_similarity": 0.7106160975689245,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 20.830313452002883,
+          "answer": "Os cloroplastos são verdes porque contêm predominantemente clorofilas (clhrós = verde).",
+          "key_points": [
+            "Os cloroplastos são organelas presentes nas células de vegetais e de outros organismos que realizam fotossíntese.",
+            "A clorofila é um pigmento que absorve luz e é responsável pela cor verde dos cloroplastos."
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quais cores de luz a clorofila absorve?",
+          "in_material": true,
+          "best_similarity": 0.6246281042473478,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 16.316736659995513,
+          "answer": "A clorofila absorve a luz azul, violeta e vermelha.",
+          "key_points": [
+            "A clorofila é um pigmento verde.",
+            "Ela absorve a luz azul, violeta e vermelha, e reflete a luz verde."
+          ],
+          "cited_pages": [
+            [
+              1,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Para que serve a glicose produzida pela planta?",
+          "in_material": true,
+          "best_similarity": 0.6603286682580015,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 41.16963606399804,
+          "answer": "A glicose produzida pela planta é utilizada para formar amido, sacarose e outros carboidratos, que são utilizados em atividades como respiração celular, formação de celulose, síntese de proteínas, entre outros.",
+          "key_points": [
+            "A glicose é um carboidrato produzido pela fotossíntese.",
+            "É utilizado como fonte de energia e estrutura para as plantas e animais.",
+            "É convertida em outros carboidratos, como amido e sacarose."
+          ],
+          "cited_pages": [
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Por que a fotossíntese é importante para a vida no planeta?",
+          "in_material": true,
+          "best_similarity": 0.751318602968143,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 56.251603163000254,
+          "answer": "A fotossíntese produz carboidratos e gás oxigénio, que são essenciais para a vida. Sem a fotossíntese, não existiria vida no planeta.",
+          "key_points": [
+            "A fotossíntese é um processo autotrófico.",
+            "É realizado pelos seres que comportam clorofila.",
+            "É importante para a cadeia alimentar."
+          ],
+          "cited_pages": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "As plantas carnívoras também fazem fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.7148067606877812,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 37.510594624996884,
+          "answer": "As plantas carnívoras realizam a fotossíntese, pois os nutrientes que a planta drena do animal ingerido é apenas um complemento para o seu sustento.",
+          "key_points": [
+            "As plantas carnívoras capturam animais para obter nutrientes.",
+            "Eles ainda precisam realizar a fotossíntese para sobreviver.",
+            "A fotossíntese é essencial para a vida das plantas carnívoras."
+          ],
+          "cited_pages": [
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quem descobriu a fotossíntese?",
+          "in_material": false,
+          "best_similarity": 0.5676740335102993,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 20.698335260996828,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "O que é o ciclo de Krebs?",
+          "in_material": false,
+          "best_similarity": 0.32837882637977833,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 21.130029798994656,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "Como os peixes respiram embaixo da água?",
+          "in_material": false,
+          "best_similarity": 0.4334299504411675,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 30.145654286003264,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "Qual é a capital da França?",
+          "in_material": false,
+          "best_similarity": 0.3001819729371157,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 21.518800285994075,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "Quanto custa um quilo de arroz no mercado?",
+          "in_material": false,
+          "best_similarity": 0.3248217925960495,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 17.836396926002635,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        }
+      ],
+      "calls": [
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 72.47599770299712
+        },
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 29.58979449400067
+        },
+        {
+          "task": "organization",
+          "is_correction": false,
+          "seconds": 84.28240612099762
+        },
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 25.25433765100024
+        },
+        {
+          "task": "organization",
+          "is_correction": false,
+          "seconds": 49.86674477399356
+        },
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 23.56086766000226
+        },
+        {
+          "task": "organization",
+          "is_correction": false,
+          "seconds": 47.755957553999906
+        },
+        {
+          "task": "organization",
+          "is_correction": true,
+          "seconds": 34.19976392699755
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 92.8206346789957
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 32.10688584399759
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 18.959445684995444
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 30.409717135997198
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 42.794928144998266
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 20.721041395998327
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 16.196219207995455
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 41.054044714001066
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 28.12084657500236
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": true,
+          "seconds": 27.925473670999054
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 37.42326862900518
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 20.5978120189975
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 21.035026386001846
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 29.90273806899495
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 21.38416821300052
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 17.735720249002043
+        }
+      ]
+    },
+    "qwen2.5:3b": {
+      "maps": [
+        {
+          "document": "fotossintese-texto-selecionavel.pdf",
+          "status": "ready",
+          "sections": 2,
+          "failed_sections": 0,
+          "seconds": 185.4969620109987,
+          "recall": 1.0,
+          "missing_entities": [],
+          "nodes": 18,
+          "topics": 4,
+          "max_concepts_per_topic": 4,
+          "structural_errors": [],
+          "label_grounding_rate": 0.8461538461538461,
+          "labels": [
+            "Fotossíntese e Sistemas Alimentares de Plantas",
+            "Fotossíntese",
+            "Cloroplasto",
+            "Clorofila",
+            "Glicose",
+            "Processo de Fotossíntese",
+            "Água",
+            "Ácido glicólico",
+            "Cadeia Alimentar",
+            "Componentes da Fotossíntese",
+            "Oxigênio",
+            "Complemento Alimentar",
+            "Triose",
+            "Resultados da Fotossíntese",
+            "Plantas Carnívoras",
+            "Nutrientes",
+            "Sustento",
+            "Sistemas Alimentares de Plantas Carnívoras"
+          ],
+          "error": null
+        },
+        {
+          "document": "01_cellular_biology.pdf",
+          "status": "ready",
+          "sections": 1,
+          "failed_sections": 0,
+          "seconds": 55.5103483579951,
+          "recall": 0.0,
+          "missing_entities": [
+            "Mitochondria",
+            "Chloroplasts",
+            "Ribosomes",
+            "Cell Membrane"
+          ],
+          "nodes": 7,
+          "topics": 2,
+          "max_concepts_per_topic": 2,
+          "structural_errors": [],
+          "label_grounding_rate": 0.5,
+          "labels": [
+            "Funcionamento Celular",
+            "Mitocôndria",
+            "Ribossom",
+            "Energia e Síntese",
+            "Cloroplasto",
+            "Membrana Celular",
+            "Luz e Íons"
+          ],
+          "error": null
+        },
+        {
+          "document": "02_thermodynamics.pdf",
+          "status": "ready",
+          "sections": 1,
+          "failed_sections": 0,
+          "seconds": 39.206013928000175,
+          "recall": 1.0,
+          "missing_entities": [],
+          "nodes": 7,
+          "topics": 2,
+          "max_concepts_per_topic": 3,
+          "structural_errors": [],
+          "label_grounding_rate": 1.0,
+          "labels": [
+            "Termodinâmica",
+            "Zeroth Law",
+            "First Law",
+            "Second Law",
+            "Definições básicas",
+            "Entropy",
+            "Quantidade de desordem"
+          ],
+          "error": null
+        }
+      ],
+      "tutor": [
+        {
+          "question": "O que é a fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.7206064580967496,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 95.36826079599996,
+          "answer": "A fotossíntese é um processo que transforma gás carbônico e água em moléculas orgânicas complexas, liberando oxigênio.",
+          "key_points": [
+            "A fotossíntese ocorre em plantas e organismos semelhantes.",
+            "Requer luz, gás carbônico e água para funcionar."
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ],
+            [
+              1,
+              1
+            ],
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              3
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quais seres realizam a fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.710322564436602,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 41.85566065400053,
+          "answer": "Plantas, alguns protistas, bactérias fotossintetizantes e cianobactérias realizam fotossíntese.",
+          "key_points": [
+            "Plantas são capazes de realizar fotossíntese.",
+            "Existem bactérias fotossintetizantes que também realizam fotossíntese.",
+            "Cianobactérias são exemplos de bactérias fotossintetizantes."
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ],
+            [
+              1,
+              1
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quais substâncias a planta usa para fazer a fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.7096922320677933,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 16.638709515995288,
+          "answer": "A planta usa gás carbônico e água para fazer a fotossíntese.",
+          "key_points": [
+            "A planta usa gás carbônico e água",
+            "Essas substâncias são convertidas em glicose",
+            "Glicose pode ser utilizada como fonte de energia e estrutural"
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ],
+            [
+              1,
+              1
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Qual gás é liberado na fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.6348498945891886,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 6.487374550000823,
+          "answer": "O gás oxigênio (O2) é liberado na fotossíntese.",
+          "key_points": [],
+          "cited_pages": [
+            [
+              1,
+              1
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "O que são os cloroplastos?",
+          "in_material": true,
+          "best_similarity": 0.7062369126912345,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 42.35702022699843,
+          "answer": "Os cloroplastos são organelas verdes nas células de plantas e outros seres que realizam fotossíntese.",
+          "key_points": [
+            "Os cloroplastos são organelas verdes",
+            "Estão presentes nas células de vegetais e outros organismos",
+            "Possuem clorofila"
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ],
+            [
+              1,
+              1
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Por que os cloroplastos são verdes?",
+          "in_material": true,
+          "best_similarity": 0.7106160975689245,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 33.89852731699648,
+          "answer": "Os cloroplastos são verdes devido à presença da clorofila.",
+          "key_points": [
+            "Cloroplastos têm cor verde.",
+            "Clorofila é pigmento que dá cor verde"
+          ],
+          "cited_pages": [
+            [
+              1,
+              1
+            ],
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quais cores de luz a clorofila absorve?",
+          "in_material": true,
+          "best_similarity": 0.6246281042473478,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 22.000642607999907,
+          "answer": "A clorofila absorve luz azul e violeta.",
+          "key_points": [
+            "Clorofila absorve luz azul e violeta.",
+            "Absorve luz verde.",
+            "Absorve luz vermelha"
+          ],
+          "cited_pages": [
+            [
+              1,
+              2
+            ],
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Para que serve a glicose produzida pela planta?",
+          "in_material": true,
+          "best_similarity": 0.6603286682580015,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 24.417257453002094,
+          "answer": "A glicose produzida pela planta pode ser convertida em amido, sacarose ou outros carboidratos.",
+          "key_points": [
+            "A glicose pode ser convertida em amido",
+            "A glicose pode ser convertida em sacarose",
+            "A glicose pode ser convertida em outros carboidratos"
+          ],
+          "cited_pages": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Por que a fotossíntese é importante para a vida no planeta?",
+          "in_material": true,
+          "best_similarity": 0.751318602968143,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 12.33375375000469,
+          "answer": "A fotossíntese é crucial para a vida no planeta, pois é ela que inicia toda a cadeia alimentar.",
+          "key_points": [
+            "Fotossíntese inicia cadeia alimentar",
+            "É através dela que se inicia toda a cadeia alimentar",
+            "Sem fotossíntese, não existiria vida em nosso planeta"
+          ],
+          "cited_pages": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              3
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "As plantas carnívoras também fazem fotossíntese?",
+          "in_material": true,
+          "best_similarity": 0.7148067606877812,
+          "llm_found": true,
+          "page_ok": true,
+          "keywords_ok": true,
+          "seconds": 29.50074723600119,
+          "answer": "Sim, as plantas carnívoras também fazem fotossíntese.",
+          "key_points": [],
+          "cited_pages": [
+            [
+              2,
+              2
+            ],
+            [
+              2,
+              2
+            ]
+          ],
+          "error": null
+        },
+        {
+          "question": "Quem descobriu a fotossíntese?",
+          "in_material": false,
+          "best_similarity": 0.5676740335102993,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 26.387734437994368,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "O que é o ciclo de Krebs?",
+          "in_material": false,
+          "best_similarity": 0.32837882637977833,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 18.338639030000195,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "Como os peixes respiram embaixo da água?",
+          "in_material": false,
+          "best_similarity": 0.4334299504411675,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 18.005133673999808,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "Qual é a capital da França?",
+          "in_material": false,
+          "best_similarity": 0.3001819729371157,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 17.756605432005017,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        },
+        {
+          "question": "Quanto custa um quilo de arroz no mercado?",
+          "in_material": false,
+          "best_similarity": 0.3248217925960495,
+          "llm_found": false,
+          "page_ok": false,
+          "keywords_ok": false,
+          "seconds": 17.17296248400089,
+          "answer": "Não encontrei isso no material da aula.",
+          "key_points": [],
+          "cited_pages": [],
+          "error": null
+        }
+      ],
+      "calls": [
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 70.90623063500243
+        },
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 41.94120608099911
+        },
+        {
+          "task": "organization",
+          "is_correction": false,
+          "seconds": 64.89651045200299
+        },
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 16.644100250996416
+        },
+        {
+          "task": "organization",
+          "is_correction": false,
+          "seconds": 37.85929461099295
+        },
+        {
+          "task": "map_section",
+          "is_correction": false,
+          "seconds": 13.621876844001235
+        },
+        {
+          "task": "organization",
+          "is_correction": false,
+          "seconds": 24.535182056002668
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 58.21712261400535
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": true,
+          "seconds": 37.050127658003476
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 26.69055803100491
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": true,
+          "seconds": 15.05118408799899
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 16.496047742999508
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 6.365375154004141
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 42.25366660200234
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 33.72158652499638
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 21.880217558005825
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 24.297485078001046
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 12.19619057700038
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 29.372952035999333
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 26.229710562001856
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 18.23633936400438
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 17.894392794005398
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 17.669993937997788
+        },
+        {
+          "task": "tutor_answer",
+          "is_correction": false,
+          "seconds": 17.06917664500361
+        }
+      ]
+    }
+  }
+}

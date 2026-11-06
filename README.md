@@ -17,7 +17,7 @@ O **CogniFlow AI** é um **tutor de aula para alunos neurodivergentes (TDAH e TE
   - **TDAH**: frases curtas em ordem direta, uma ideia por frase, informação principal primeiro e siglas por extenso na primeira menção, além da diferenciação visual por categorias e da prévia do resumo nos cartões do grafo (redução do *split-attention effect*).
   - As regras ficam em perfis (`AccessibilityProfile`, em `backend/app/services/prompts/profiles.py`), separados das instruções de cada tarefa: novos públicos, como estudantes surdos, poderão ser atendidos no futuro com um novo perfil.
 - **Alternância Visual / Textual sem Perda de Estado**: Transição imediata entre o **Mapa** interativo (React Flow + layout automático Dagre) e a visualização em **Lista** estruturada (acessível para leitores de tela e navegação integral por teclado), preservando posições, zoom e nó selecionado.
-- **IA 100% Local com Ollama**: LLM `llama3.2:3b` e embeddings `bge-m3` executados na própria máquina (privacidade LGPD), com verificação de prontidão em `GET /api/health`. As interfaces de provedor permitem reintroduzir outros serviços, como o Google Gemini, no futuro.
+- **IA 100% Local com Ollama**: LLM `qwen2.5:3b` (escolhido na avaliação comparativa) e embeddings `bge-m3` executados na própria máquina (privacidade LGPD), com verificação de prontidão em `GET /api/health`. As interfaces de provedor permitem reintroduzir outros serviços, como o Google Gemini, no futuro.
 
 ---
 
@@ -79,9 +79,9 @@ docker compose up -d
 Esse comando provisiona:
 - **`cogniflow_pgvector`** (`pgvector/pgvector:pg16` na porta `5432`): banco de dados PostgreSQL 16 com a extensão `vector` inicializada automaticamente.
 - **`cogniflow_ollama`** (`ollama/ollama:latest` na porta `11434`): servidor local para execução de LLMs e embeddings abertos.
-- **`cogniflow_ollama_init`**: container auxiliar que baixa automaticamente os modelos padrão (`bge-m3` para embeddings e `llama3.2:3b` como LLM) assim que o serviço `ollama` fica saudável.
+- **`cogniflow_ollama_init`**: container auxiliar que baixa automaticamente os modelos padrão (`bge-m3` para embeddings e `qwen2.5:3b` como LLM) assim que o serviço `ollama` fica saudável.
 
-> **Requisitos de hardware:** os modelos `llama3.2:3b` (≈ 2 GB) e `bge-m3` (≈ 1,2 GB) exigem cerca de **4 GB de RAM livres** e ≈ 3,5 GB de disco no volume `ollama_data`. Sem GPU, a geração funciona em CPU, porém mais lenta.
+> **Requisitos de hardware:** os modelos `qwen2.5:3b` (≈ 1,9 GB) e `bge-m3` (≈ 1,2 GB) exigem cerca de **4 GB de RAM livres** e ≈ 3,5 GB de disco no volume `ollama_data`. Sem GPU, a geração funciona em CPU, porém mais lenta.
 >
 > **Paralelismo:** a variável `OLLAMA_NUM_PARALLEL` (padrão `1` no `docker-compose.yml`) define quantas requisições cada modelo atende ao mesmo tempo. Com `1`, as chamadas são processadas em série e o uso de memória fica previsível; aumente apenas se houver memória sobrando.
 
@@ -123,7 +123,7 @@ cp .env.example .env
 
 > **Provedor de IA (`EMBEDDING_PROVIDER` e `LLM_PROVIDER`):** nesta versão, o único provedor suportado é o **Ollama** (`"ollama"`), executado localmente — nenhum dado do material sai da máquina. Qualquer outro valor faz o backend falhar na inicialização.
 > - `OLLAMA_EMBEDDING_MODEL="bge-m3"` e `EMBEDDING_DIMENSION=1024`: embeddings multilíngues com bom desempenho em português.
-> - `OLLAMA_LLM_MODEL="llama3.2:3b"` e `OLLAMA_NUM_CTX=8192`: modelo de 3B parâmetros e tamanho da janela de contexto.
+> - `OLLAMA_LLM_MODEL="qwen2.5:3b"` e `OLLAMA_NUM_CTX=8192`: modelo de 3B parâmetros (escolhido na comparação com o `llama3.2:3b`, ver [docs/avaliacao-modelos.md](docs/avaliacao-modelos.md)) e tamanho da janela de contexto.
 > - O suporte ao **Google Gemini** foi suspenso nesta versão; o código do provedor foi mantido como ponto de extensão para o futuro.
 
 ### 2.2. Criar Ambiente Virtual e Instalar Dependências
@@ -284,7 +284,19 @@ Esses testes usam provedores falsos de IA e verificam o encadeamento das etapas,
 ./backend/.venv/bin/pytest -c backend/pyproject.toml backend/tests -m llm -v
 ```
 
-### 5.2. Rodar o Script de Demonstração ao Vivo (Pitch)
+### 5.2. Avaliar e Comparar os Modelos (Ollama)
+
+O pacote `backend/evaluation/` mede a qualidade com os modelos reais e compara LLMs. Ele usa um PostgreSQL descartável (Testcontainers), sem tocar no banco local, e exige o Ollama com o `bge-m3` e os modelos comparados:
+
+```bash
+docker compose up -d ollama
+docker compose exec ollama ollama pull llama3.2:3b   # o qwen2.5:3b e o bge-m3 já vêm do ollama_init
+cd backend && ./.venv/bin/python -m evaluation --models llama3.2:3b qwen2.5:3b
+```
+
+São medidos, por modelo: JSON válido na primeira tentativa, recall de entidades e status do mapa, aderência heurística ao perfil de acessibilidade, acerto do tutor em 10 perguntas respondíveis e 5 fora do material (fotossíntese) e latência. O limiar `TUTOR_MIN_SIMILARITY` é calibrado com as similaridades medidas. O resultado bruto é salvo em `backend/evaluation/results/`, e a análise da última execução está em [docs/avaliacao-modelos.md](docs/avaliacao-modelos.md). Em CPU, a execução completa leva cerca de 45 minutos.
+
+### 5.3. Rodar o Script de Demonstração ao Vivo (Pitch)
 
 Para executar a conversão fim-a-fim do PDF da proposta (ingestão em memória + map-reduce, com o Ollama) com medição de **Recall** e **Latência**:
 
@@ -292,7 +304,7 @@ Para executar a conversão fim-a-fim do PDF da proposta (ingestão em memória +
 PYTHONPATH=backend ./backend/.venv/bin/python backend/scripts/demo_pitch.py
 ```
 
-### 5.3. Verificar o Frontend (Lint, Tipos, Testes Unitários e E2E)
+### 5.4. Verificar o Frontend (Lint, Tipos, Testes Unitários e E2E)
 
 Em outro terminal, a partir da pasta `frontend/`:
 

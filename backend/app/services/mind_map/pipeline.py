@@ -13,6 +13,7 @@ from app.schemas.mind_map import (
 from app.services.embeddings import BaseEmbeddingProvider
 from app.services.llm_provider import BaseLLMProvider
 from app.services.mind_map.llm_schemas import (
+    AxisConcept,
     ConceptSelection,
     ExtractedConcept,
     ExtractedExample,
@@ -223,39 +224,45 @@ class MindMapPipeline:
 
     async def organize(self, concepts: Sequence[Concept]) -> MapOrganization:
         by_id = {concept.id: concept for concept in concepts}
-        min_axes = min(MIN_TOPICS, len(concepts))
+        # Short documents get fewer axes: 3 axes for 4 concepts would leave one concept each.
+        min_axes = min(MIN_TOPICS, max(1, len(concepts) // 2))
 
         def validate(output: MapOrganization) -> tuple[MapOrganization, list[str]]:
+            """Reject what cannot be fixed safely; normalize what can.
+
+            A concept repeated in a second axis stays in the first one, and an axis left
+            without concepts is dropped: rejecting these made a 3B model fail most maps,
+            since each correction broke another rule. Concepts left out are placed later
+            by `place_left_out`.
+            """
             problems: list[str] = []
             if not clean_concept_label(output.topic):
                 problems.append("o campo topic está vazio.")
             if not output.synthesis.strip():
                 problems.append("o campo synthesis está vazio.")
-            if not min_axes <= len(output.axes) <= MAX_TOPICS:
-                problems.append(f"crie de {min_axes} a {MAX_TOPICS} eixos (você criou {len(output.axes)}).")
             used: set[str] = set()
             axes = []
             for position, axis in enumerate(output.axes, start=1):
                 title = clean_concept_label(axis.title)
                 if not title:
                     problems.append(f"eixo {position}: o campo title está vazio.")
-                if not axis.concepts:
-                    problems.append(f"eixo {position}: inclua pelo menos um conceito.")
+                kept = []
                 for item in axis.concepts:
                     if item.id not in by_id:
                         problems.append(f"eixo {position}: o conceito {item.id} não está na lista.")
                     elif item.id in used:
-                        problems.append(f"o conceito {item.id} aparece em mais de um eixo.")
+                        continue  # already placed in an earlier axis
                     elif by_id[item.id].label.casefold() == title.casefold():
                         problems.append(
                             f"eixo {position}: o título é igual ao conceito {item.id}; use um título que agrupe os conceitos."
                         )
-                    used.add(item.id)
-                axes.append(
-                    axis.model_copy(
-                        update={"title": title, "concepts": axis.concepts[:MAX_CONCEPTS_PER_TOPIC]}
-                    )
-                )
+                    else:
+                        used.add(item.id)
+                        kept.append(item)
+                if kept:
+                    axes.append(axis.model_copy(update={"title": title, "concepts": kept[:MAX_CONCEPTS_PER_TOPIC]}))
+            if not min_axes <= len(axes) <= MAX_TOPICS:
+                problems.append(f"crie de {min_axes} a {MAX_TOPICS} eixos (você criou {len(axes)}).")
             return output.model_copy(update={"axes": axes}), problems
 
         return await generate_structured(
@@ -267,6 +274,36 @@ class MindMapPipeline:
             MapOrganization,
             validate,
         )
+
+    async def place_left_out(self, organization: MapOrganization, concepts: Sequence[Concept]) -> MapOrganization:
+        """Put concepts the model left out into the most similar axis that still has room.
+
+        A 3B model often drops core concepts when organizing, and cannot be forced to
+        place all of them (every correction breaks another rule). Placement is decided
+        by bge-m3 similarity between the concept and the axis written by the model;
+        no content is generated here.
+        """
+        placed = {item.id for axis in organization.axes for item in axis.concepts}
+        left_out = [concept for concept in concepts if concept.id not in placed]
+        if not left_out or not organization.axes:
+            return organization
+
+        axis_vectors = await self._embedder.embed_documents(
+            [f"{axis.title}. {axis.summary}" for axis in organization.axes]
+        )
+        concept_vectors = await self._embedder.embed_documents(
+            [f"{concept.label}. {concept.summary}" for concept in left_out]
+        )
+        axes = [axis.model_copy(update={"concepts": list(axis.concepts)}) for axis in organization.axes]
+        for concept, vector in zip(left_out, concept_vectors, strict=True):
+            ranked = sorted(
+                range(len(axes)), key=lambda index: _cosine(vector, axis_vectors[index]), reverse=True
+            )
+            target = next((index for index in ranked if len(axes[index].concepts) < MAX_CONCEPTS_PER_TOPIC), None)
+            if target is not None:
+                axes[target].concepts.append(AxisConcept(id=concept.id, relation="has_part"))
+        logger.info("Placed %d concepts left out by the model into the closest axes.", len(left_out))
+        return organization.model_copy(update={"axes": axes})
 
     # ---- Compile -----------------------------------------------------------------------
 
@@ -372,7 +409,7 @@ class MindMapPipeline:
         if on_phase:
             await on_phase("organizing")
         concepts = await self.select(concepts)
-        organization = await self.organize(concepts)
+        organization = await self.place_left_out(await self.organize(concepts), concepts)
         graph = self.compile_graph(organization, concepts, fallback_topic)
 
         errors = validate_mind_map_graph(graph, valid_chunk_indices)
